@@ -1,0 +1,365 @@
+---
+title: "first_data_exploration"
+format: html
+editor: visual
+---
+
+# Data Exploration
+
+The first data access and exploration for understanding and investigation before downstream performance. From the original source folder, the directory has been copied to my personal directory.
+
+------------------------------------------------------------------------
+
+## 1. Setting Up
+
+### 1.1 Packages
+
+Installing the packages needed
+
+```{r}
+library(ggplot2)# For visual plotting
+library(dplyr) # For dataframe manipulation
+```
+
+### 1.2 Working Directory
+
+Double checking the working directory location
+
+```{r}
+getwd() # Prints working directory
+```
+
+------------------------------------------------------------------------
+
+## 2. 'dataset.RData' Exploration
+
+This file contains the large matrix of immunophenotypes and inflammatory protein variables. Relevant covariates are included as well. Information of this dataframe is also provided, describing the immunophenotypes. The data is precleaned.
+
+### 2.1 Loading the data
+
+```{r}
+# Loading/Restoring the dataset from personal directory to current Global Environment
+load("/users/k25046756/Twins_Project/raw_olink_ip/data/dataset.RData")
+```
+
+After loading, dataset.RData contains two objects; dataset and info.
+
+### 2.2 Structure Checks
+
+Exploring how the data is organised and what data types it features.
+
+```{r}
+head(dataset) # Quick view
+dim(dataset) # Exploring dimensions
+```
+
+From the dimensions, there are 485 rows, signifying that there are 485 unique individuals. The first 23 columns contain metadata and covariates. Columns 24 to 97 contain the proteomic data of the inflammatory proteins from the Olink panel. Column 98 is iid which is the individual ID. Then the rest of the columns (99 to 42393) contain the immunophenotypes.
+
+### 2.3 Exploring the Metadata
+
+Understanding the population.
+
+#### 2.3.1 Sex and Zygosity
+
+```{r}
+print(table(dataset$SEX)) # Sex
+print(table(dataset$Z)) # Zygote
+```
+
+All individuals are females and there are 333 dizygotic/fraternal and 152 monozygotic/identical of twins.
+
+To understand whether individuals were tested with their pairs or alone, analysis of FID (family ID) is required.
+
+```{r}
+#Finding non repeated FID
+dataset %>%
+  group_by(fid) %>%
+  filter(n() ==1) %>%
+  pull (fid)
+```
+
+11 individuals were tested without their pair. This could be due to factors like consent, schedule...
+
+#### 2.3.2 Age Statistics
+
+```{r}
+cat("Mean Age: ", mean(dataset$Age), "\n") #Mean Age
+cat("SD Age:   ", sd(dataset$Age), "\n") #Standard deviation
+cat("Youngest: ", min(dataset$Age), "\n") #Youngest
+cat("Oldest:   ", max(dataset$Age), "\n") #Oldest
+cat("Median:   ", median(dataset$Age), "\n") #Median
+```
+
+note : Perhaps can do a age plot with mz/dz distribution population pyramid plot..
+
+##### 2.3.2.1 Graphing Age distribution
+
+```{r}
+#setting the age group distribution 
+dataset_clean <- dataset %>%
+  mutate(Age_Bin = cut(Age, breaks = seq(40, 80, by = 5),labels = c("40-44", "45-49", "50-54", "55-59", "60-64", "65-69", "70-74", "75-79"), right = FALSE))
+
+#using ggplot to create a stacked bar chart 
+age_zyg_plot<- ggplot(dataset_clean, aes(x = Age_Bin, fill = Z)) +
+                  geom_bar(position = "stack", color = "white", size = 0.2) +
+                  #adding in the numbers in the bars for distribution 
+                  stat_count(geom = "text", aes(label = after_stat(count)), 
+                             position = position_stack(vjust = 0.5), size = 3, color = "black") +
+                  labs(
+                    title = "Age and Zygosity Distribution (Raw)",
+                    x = "Age Group ",
+                    y = "Number of Individuals",
+                    fill = "Zygosity"
+                  ) +
+                  scale_fill_manual(values = c("DZ" = "#b093c7", "MZ" = "#825d9e")) +
+                  theme_minimal() +
+                  theme(
+                    plot.title = element_text(hjust = 0.5, face = "bold"),
+                    panel.grid = element_blank(), #remove grid lines
+                    axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1)
+                  )
+
+ggsave("raw_age_zyg_plot.png", width =8, height =5)
+```
+
+2.3.2.2 Remove unpaired twins.
+
+```{r}
+#For downstream analysis, only want complete pair so we need to remove the singletons
+dataset_paired<- dataset %>%
+  group_by(fid) %>%
+  filter(n() == 2) %>%  
+  ungroup()
+```
+
+Now find the distribution of twins in the paired set
+
+```{r}
+print(table(dataset_paired$Z)) # Zygote
+```
+
+```{r}
+cat("Mean Age: ", mean(dataset_paired$Age), "\n") #Mean Age
+cat("SD Age:   ", sd(dataset_paired$Age), "\n")
+cat("Youngest: ", min(dataset_paired$Age), "\n") #Youngest
+cat("Oldest:   ", max(dataset_paired$Age), "\n") #Oldest
+cat("Median:   ", median(dataset_paired$Age), "\n") #Median
+```
+
+Recreate the plot with only paired twins
+
+```{r}
+#setting the age group distribution 
+dataset_pairs <- dataset_paired %>%
+  mutate(Age_Bin = cut(Age, breaks = seq(40, 80, by = 5),labels = c("40-44", "45-49", "50-54", "55-59", "60-64", "65-69", "70-74", "75-79"), right = FALSE))
+
+#using ggplot to create a stacked bar chart 
+age_zyg_plot<- ggplot(dataset_pairs, aes(x = Age_Bin, fill = Z)) +
+                  geom_bar(position = "stack", color = "white", size = 0.2) +
+                  #adding in the numbers in the bars for distribution 
+                  stat_count(geom = "text", aes(label = after_stat(count)), 
+                             position = position_stack(vjust = 0.5), size = 3, color = "black") +
+                  labs(
+                    title = "Age and Zygosity Distribution (Incomplete Pairs Removed)",
+                    x = "Age Group ",
+                    y = "Number of Individuals",
+                    fill = "Zygosity"
+                  ) +
+                  scale_fill_manual(values = c("DZ" = "#b093c7", "MZ" = "#825d9e")) +
+                  theme_minimal() +
+                  theme(
+                    plot.title = element_text(hjust = 0.5, face = "bold"),
+                    panel.grid = element_blank(), #remove grid lines
+                    axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1)
+                  )
+
+ggsave("rm_age_zyg_plot.png", width =8, height =5)
+```
+
+#### 2.3.3 QC Warning
+
+In downstream analysis, we may have to omit those that did not pass the Olink QC (not sure if this is applies to bioinformatics pipeline). But if we remove those individuals, we are left with singleton twins.
+
+```{r}
+#Finding how many passed and those who got warnings
+print(table(dataset$QC)) 
+
+dataset %>%
+  group_by(`QC Warning`) %>%
+  filter(`QC Warning` == "Warning") %>%
+  pull (id)
+```
+
+We need to remove those 7 and their twin so 14 individuals.
+
+```{r}
+#Final filtering after QC warning 
+dataset_final<- dataset_paired %>%
+  filter(`QC Warning` == "Pass") %>%
+  group_by(fid) %>%
+  filter(n() == 2) %>% 
+  ungroup()
+```
+
+Graphing the qc filtered age distribution
+
+```{r}
+
+#setting the age group distribution 
+dataset_clean <- dataset_final %>%
+  mutate(Age_Bin = cut(Age, breaks = seq(40, 80, by = 5),labels = c("40-44", "45-49", "50-54", "55-59", "60-64", "65-69", "70-74", "75-79"), right = FALSE))
+
+#using ggplot to create a stacked bar chart 
+age_zyg_plot<- ggplot(dataset_clean, aes(x = Age_Bin, fill = Z)) +
+                  geom_bar(position = "stack", color = "white", size = 0.2) +
+                  #adding in the numbers in the bars for distribution 
+                  stat_count(geom = "text", aes(label = after_stat(count)), 
+                             position = position_stack(vjust = 0.5), size = 3, color = "black") +
+                  labs(
+                    title = "Age and Zygosity Distribution (Final - After QC)",
+                    x = "Age Group ",
+                    y = "Number of Individuals",
+                    fill = "Zygosity"
+                  ) +
+                  scale_fill_manual(values = c("DZ" = "#b093c7", "MZ" = "#825d9e")) +
+                  theme_minimal() +
+                  theme(
+                    plot.title = element_text(hjust = 0.5, face = "bold"),
+                    panel.grid = element_blank(), #remove grid lines
+                    axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1)
+                  )
+
+ggsave("fn_age_zyg_plot.png", width =8, height =5)
+```
+
+```{r}
+print(table(dataset_final$Z)) # Zygote
+cat("Mean Age: ", mean(dataset_final$Age), "\n") #Mean Age
+cat("SD Age:   ", sd(dataset_final$Age), "\n")
+cat("Youngest: ", min(dataset_final$Age), "\n") #Youngest
+cat("Oldest:   ", max(dataset_final$Age), "\n") #Oldest
+cat("Median:   ", median(dataset_final$Age), "\n") #Median
+```
+
+Checking the age distribution of MZ
+
+```{r}
+print("MZ")
+cat("Mean Age: ", mean(dataset_final$Age[dataset_final$Z == "MZ"]), "\n") #Mean Age
+cat("SD Age:   ", sd(dataset_final$Age[dataset_final$Z == "MZ"]), "\n")
+cat("Youngest: ", min(dataset_final$Age[dataset_final$Z == "MZ"]), "\n") #Youngest
+cat("Oldest:   ", max(dataset_final$Age[dataset_final$Z == "MZ"]), "\n") #Oldest
+cat("Median:   ", median(dataset_final$Age[dataset_final$Z == "MZ"]), "\n") #MediaN
+
+```
+
+Checking the age distribution of DZ
+
+```{r}
+print("DZ")
+cat("Mean Age: ", mean(dataset_final$Age[dataset_final$Z == "DZ"]), "\n") #Mean Age
+cat("SD Age:   ", sd(dataset_final$Age[dataset_final$Z == "DZ"]), "\n")
+cat("Youngest: ", min(dataset_final$Age[dataset_final$Z == "DZ"]), "\n") #Youngest
+cat("Oldest:   ", max(dataset_final$Age[dataset_final$Z == "DZ"]), "\n") #Oldest
+cat("Median:   ", median(dataset_final$Age[dataset_final$Z == "DZ"]), "\n") #Median
+```
+
+#### 2.3.4 BMI checks
+
+```{r}
+cat("Mean BMI: ", mean(dataset_final$BMI), "\n") #Mean Age
+cat("SD BMI:   ", sd(dataset_final$BMI), "\n")
+cat("Median:   ", median(dataset_final$BMI), "\n") #Median
+cat("Lowest: ", min(dataset_final$BMI), "\n") #Youngest
+cat("Highest:   ", max(dataset_final$BMI), "\n") #Oldest
+
+print("MZ")
+cat("Mean BMI: ", mean(dataset_final$BMI[dataset_final$Z == "MZ"]), "\n") #Mean Age
+cat("SD BMI:   ", sd(dataset_final$BMI[dataset_final$Z == "MZ"]), "\n")
+cat("Median:   ", median(dataset_final$BMI[dataset_final$Z == "MZ"]), "\n") #Median
+
+cat("Lowest: ", min(dataset_final$BMI[dataset_final$Z == "MZ"]), "\n") #Youngest
+cat("Highest:   ", max(dataset_final$BMI[dataset_final$Z == "MZ"]), "\n") #Oldest
+
+print("DZ")
+cat("Mean BMI: ", mean(dataset_final$BMI[dataset_final$Z == "DZ"]), "\n") #Mean Age
+cat("SD BMI:   ", sd(dataset_final$BMI[dataset_final$Z == "DZ"]), "\n")
+cat("Lowest: ", min(dataset_final$BMI[dataset_final$Z == "DZ"]), "\n") #Youngest
+cat("Highest:   ", max(dataset_final$BMI[dataset_final$Z == "DZ"]), "\n") #Oldest
+cat("Median:   ", median(dataset_final$BMI[dataset_final$Z == "DZ"]), "\n") #Median
+```
+
+Could make a boxplot graph for the bmis of total cohort, mz then dz
+
+Note: Check if twins got tested on different plates/times.
+
+## 3. 'Olink_associations.RData' Exploration
+
+This file contains the Olink association results and contains the objects: acc_list, infoF, olink_ass, olink_modules and tr.
+
+### 3.1 Loading the data
+
+```{r}
+load("/users/k25046756/Twins_Project/raw_olink_ip/results/Olink_associations.RData")
+```
+
+The data frame tr is the focus of the project as it contains the FDR-significant results including the beta, se, p-values corresponding with the summary association statistics.
+
+### 3.2 Structure Checks
+
+Exploring how the data is organised and what data types it features.
+
+```{r}
+head(tr) 
+dim(tr)
+```
+
+Each row represents the relationship between a specific immune phenotype (IP) and protein.
+
+### 3.3 Protein Investigations
+
+```{r}
+#Unique proteins
+length(unique(tr$Protein)) 
+
+#Protein frequency
+tr %>%
+  count(Protein, sort = TRUE)
+
+tr %>%
+  count(Protein, sort = TRUE)%>% 
+  tail(10)
+
+```
+
+There are 65 unique proteins. Meaning 65 proteins from original 74 that are correlated with immune cells from the flow cytometry.
+
+### 3.4 Lineage Investigations
+
+```{r}
+#Unique lineages
+length(unique(tr$Lineage))
+
+#Lineages of cells
+tr %>%
+  count(Lineage, sort = TRUE)
+
+#Not sure why but last page isnt showing
+tr %>%
+  count(Lineage, sort = TRUE)%>% 
+  tail(10)
+
+```
+
+There are 27 unique lineages.
+
+```{r}
+sessionInfo()
+
+```
+
+------------------------------------------------------------------------
+
+# 4. FDR Associations
+
+Finding the top 5% of Protein-cell associations. The tr data frame will be used as it contains the statistical values of all instead of the individual csv files. All of which are already statistically significant. The tr data frame already has q values in the last column so there are 18,629 statistically significant entries.
