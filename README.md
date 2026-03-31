@@ -1,6 +1,7 @@
 # TwinsUK_Inflammaging_MSc
 - [Introduction](#introduction) 
 
+## Introduction
 
 ## Repository Structure
 - `data/`
