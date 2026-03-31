@@ -9,6 +9,7 @@ This repository is part of an extended research project for the MSc Applied Bioi
 
 
 ## <a id="repostructure"></a> Repository Structure 
+All Bioinformatics pipeline was conducted on the CREATE HPC. Data, results, logs and software directories have been omitted.
 - `data/`
   - `raw_olink_ip/`
     - Contains the raw, original data.
