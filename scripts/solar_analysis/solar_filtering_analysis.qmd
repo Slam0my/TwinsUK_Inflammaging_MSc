@@ -1,0 +1,347 @@
+---
+title: "solar_analysis_filtering"
+format: html
+editor: visual
+---
+
+# SOLAR Results Analysis
+
+After obtaining the IP-Protein associations from the SOLAR analysis. Exploration is needed for interpretation.
+
+## 1. Set up
+
+### 1.1 Load libraries
+
+```{r}
+library(stringr)
+library(dplyr)
+library(tidyr)
+library(viridis) #Colour blind friendly palette
+library(ggplot2) #Graphing
+library(pheatmap) #Heatmap
+
+#Network graphs
+library(igraph)
+library(ggraph)
+library(tidygraph)
+```
+
+### 1.2 Set Working Directory
+
+```{r}
+setwd("/users/k25046756/Twins_Project/data/solar_analysis")
+```
+
+### 1.3 Loading Data
+
+```{r}
+#Importing the summary results
+summary_results<- read.delim("summary_heritability.csv")
+```
+
+## 2. Filtering of Significant Associations
+
+### 2.1 FDR Adjusted Filtering
+
+Adjusting with FDR to find those significant based on FDR \< 0.05
+
+```{r}
+#Adding in FDR of rhoG and rhoE
+summary_results_fdr <- summary_results %>%
+  mutate(
+    rhoG_FDR = p.adjust(rhoG_p0, method = "fdr"),
+    rhoE_FDR = p.adjust(rhoE_p, method = "fdr")
+  )
+
+#Genetics
+#Experimenting with different h2r thresholds
+genetic_0.1_hits <- summary_results_fdr %>%
+  filter(h2r1 > 0.1 & h2r2 > 0.1 & rhoG_FDR < 0.05)
+#4300
+
+genetic_0.3_hits <- summary_results_fdr %>%
+  filter(h2r1 > 0.3 & h2r2 > 0.3 & rhoG_FDR < 0.05)
+#4047
+
+genetic_0.5_hits <- summary_results_fdr %>%
+  filter(h2r1 > 0.5 & h2r2 > 0.5 & rhoG_FDR < 0.05)
+#1068
+
+
+#Environmental
+#Only accounting for rhoE as h2r can be low or high 
+environmental_hits <- summary_results_fdr %>%
+  filter(rhoE_FDR < 0.05)
+
+
+#Significant in both genetic and environmental correlations
+both_hits <- summary_results_fdr %>%
+  filter(h2r1 > 0.1 & h2r2 > 0.1 & rhoG_FDR < 0.05 & rhoE_FDR < 0.05)
+```
+
+### 2.2 Further Filtering
+
+Further filtering of genetically correlated pairs with environmental associations and vise versa - environmentally correlated pairs with genetic associations.
+
+```{r}
+#Genetics -> how many are also environmental 
+gen_env_0.1 <- genetic_0.1_hits %>%
+  filter(rhoE_p < 0.05)
+
+gen_env_0.3 <- genetic_0.3_hits %>%
+  filter(rhoE_p < 0.05)
+#same 130 pairs 
+
+gen_env_0.5 <- genetic_0.5_hits %>%
+  filter(rhoE_p < 0.05)
+#only 1 IMMUNO_41521 TNFB
+
+#Environmental -> how many are genetics
+env_gen <- environmental_hits%>%
+  filter(rhoG_p0<0.05)
+```
+
+### 2.3 Saving the output environment
+
+Saving to be loaded downstream
+
+```{r}
+save.image(file = "solar_analysis_filtering_results.RData")
+```
+
+## 3. Protein frequencies
+
+In the 0.1 and 0.3 top hits, find what proteins are most frequent/popular for genetic. Observing whether there are changes in protein frequency patterns.
+
+### 3.1 Genetic h2r 0.1 filtered hits
+
+```{r}
+#Count protein frequency in genetic_0.1_hits
+protein_frequency_0.1 <- genetic_0.1_hits %>%
+  group_by(trait2) %>% #trait2 is the protein column
+  summarise(count = n()) %>%
+  arrange(desc(count))
+
+#Looking at the top 10
+print(head(protein_frequency_0.1, 10))
+```
+
+### 3.2 Genetic h2r 0.3 filtered hits
+
+```{r}
+#Count protein frequency in genetic_0.3_hits
+protein_frequency_0.3 <- genetic_0.3_hits %>%
+  group_by(trait2) %>% 
+  summarise(count = n()) %>%
+  arrange(desc(count))
+
+print(head(protein_frequency_0.3, 10))
+```
+
+### 3.3 Environmentally filtered hits
+
+```{r}
+# Count how many times each protein appears in your genetic hits
+protein_frequency_env <- environmental_hits %>%
+  group_by(trait2) %>% # assuming trait2 is your protein
+  summarise(count = n()) %>%
+  arrange(desc(count))
+
+# Look at the top 10
+print(head(protein_frequency_env, 10))
+```
+
+## 4. IP-Protein Summary Statistics
+
+Show the distribution of those genetically, environmentally and both significant.
+
+### 4.1 Graphing Correlation Landscape
+
+Visualising the distribution of genetic and environmental correlations.
+
+```{r}
+#From summary_results_fdr, seleting those significant for rhoG, rhoE and both
+#For purpose of graphing, we redefine the labels
+summary_results_fdr_points <- summary_results_fdr %>%
+ mutate(Sig_Type = case_when(
+  rhoG_FDR < 0.05 & rhoE_FDR < 0.05 ~ "Both Significant",
+  rhoG_FDR < 0.05 & rhoE_FDR >= 0.05 ~ "Genetic Only (rhoG)",
+  rhoG_FDR >= 0.05 & rhoE_FDR < 0.05 ~ "Environmental Only (rhoE)",
+  TRUE ~ "Non-Significant"
+ ))
+
+#Plotting a graph to show the rhoG and rhoE distribution of all IP -Protein associations
+ggplot(summary_results_fdr_points, aes(x = rhoG, y = rhoE, color = Sig_Type)) +
+ #Adding each pair as a point
+ geom_point(alpha = 0.5, size = 1) +
+ #Adding a cross
+ geom_vline(xintercept = 0, linetype = "dashed", color = "grey50") +
+ geom_hline(yintercept = 0, linetype = "dashed", color = "grey50") +
+ #Colour scale
+ scale_color_viridis_d(option = "viridis") +
+ theme_minimal() +
+ #Lablelling
+ labs(
+  title = "IP-Protein Association Correlation Landscape",
+  subtitle = "Based on FDR-adjusted significance",
+  x = "Genetic Correlation (rhoG)",
+  y = "Environmental Correlation (rhoE)",
+  color = "Significance Status"
+ )
+```
+
+### 4.2 Summary Table
+
+Summary table from the fdr results based on correlation types for quantification.
+
+```{r}
+summary_table <- summary_results_fdr %>%
+  group_by(Sig_Type) %>%
+  summarise(
+    n = n(),
+    mean_rhoG = mean(rhoG),
+    mean_rhoE = mean(rhoE),
+    mean_h2r1 = mean(h2r1),
+    mean_h2r2 = mean(h2r2)
+  )
+
+summary_table
+```
+
+## 5. Transforming the data frame
+
+For visualisations, the dataframe, which is in a long format, needs to be converted into a wide format (numerical matrix). The dataframes are normalised and NAs were already filtered.
+
+```{r}
+#Create a function that applies to all filtered dataset variables
+conv_matrix <- function(df, value_col) {
+  
+  mat <- df %>%
+    select(trait1, trait2, all_of(value_col)) %>% 
+    
+    pivot_wider(
+      names_from = trait2,   #changing proteins column
+      values_from = all_of(value_col)
+    ) %>%
+
+    column_to_rownames("trait1") %>%
+    as.matrix()
+  
+  #replacing NAs from matrix conversion with 0
+  mat[is.na(mat)] <- 0
+  mat[is.nan(mat)] <- 0
+  mat[is.infinite(mat)] <- 0
+  
+  return(mat)
+}
+   
+```
+
+## 6. Genetic Hits Analysis
+
+With the genetic hits filtered for h2r \> 0.1.
+
+### 6.1 Heatmap
+
+```{r}
+genetic_matrix <- conv_matrix(genetic_0.1_hits, "rhoG")
+
+genetic_heatmap<-pheatmap(
+            t(genetic_matrix), #transpose so x axis is IP and protein on Y 
+            color = viridis(100),
+            cluster_rows = TRUE,
+            cluster_cols = TRUE,
+            fontsize_row = 6,
+            fontsize_col = 6,
+            show_rownames = TRUE,
+            show_colnames = FALSE,
+            na_colour = "black",  
+            main = "Genetic Correlations (IP vs Proteins)",
+            border_color = NA
+          )
+genetic_heatmap
+```
+
+Heatmap appears sparce visually.
+
+### 6.2 Shared Protein Distribution
+
+```{r}
+#Counting how many share proteins
+ip_gen_sharing <- genetic_0.1_hits %>%
+  group_by(trait1) %>%
+  summarise(protein_count = n()) %>%
+  arrange(desc(protein_count))
+
+#Table
+shared_protein_ip_gen <- table(ip_gen_sharing$protein_count)
+
+shared_protein_ip_gen
+```
+
+## 7. Environmental Hits Analysis
+
+### 7.1 Heatmap
+
+```{r}
+environmental_matrix <- conv_matrix (environmental_hits, "rhoE")
+
+env_heatmap<-pheatmap(
+            environmental_matrix,
+            color = viridis(100),
+            cluster_rows = TRUE,
+            cluster_cols = TRUE,
+            fontsize_row = 6,
+            fontsize_col = 6,
+            show_rownames = FALSE,
+            show_colnames = TRUE,
+            na_colour = "black",  
+            main = "Environmental Correlations (IP vs Proteins)",
+            border_color = NA
+          )
+env_heatmap
+```
+
+### 7.2 Shared Protein Distribution
+
+```{r}
+#Counting how many share proteins
+ip_env_sharing <- environmental_hits %>%
+  group_by(trait1) %>%
+  summarise(protein_count = n()) %>%
+  arrange(desc(protein_count))
+
+#Table
+shared_protein_ip_env <- table(ip_env_sharing$protein_count)
+
+shared_protein_ip_env
+```
+
+## 8. Both Genetic and Environmentally Correlated
+
+All hits are positive. Only CXCL9 protein has IP associations.
+
+```{r}
+#Plotting with different graph
+both_dual <- both_hits %>%
+  mutate(IP = reorder(trait1, abs(rhoG))) %>%
+  select(IP, Protein = trait2, rhoG, rhoE)
+
+#Lollipop graph to show both rhoG and rhoE
+ggplot(both_dual, aes(x = reorder(IP, abs(rhoG)))) +
+  geom_segment(aes(xend = IP, y = rhoG, yend = rhoE), color = "grey85", size = 1) +
+  geom_point(aes(y = rhoG, color = "Genetic (ρG)"), size = 3) +
+  geom_point(aes(y = rhoE, color = "Environmental (ρE)"), size = 3) +
+  coord_flip() +
+  scale_color_viridis_d(option = "D", begin = 0.2, end = 0.8)+
+  labs(
+    title = "Genetic + Environmental Correlations",
+    subtitle = "Only CXCL9 had IPs significant in both genetic and environmental correlations.",
+    x = "Immunophenotype", y = "Correlation Coefficient with CXCL9",
+    color = "Correlation Type"
+  ) +
+  theme_minimal() +
+  geom_hline(yintercept = 0, linetype = "dashed", alpha = 0.5)
+```
+
+Higher genetic correlations than environmental counterpart.

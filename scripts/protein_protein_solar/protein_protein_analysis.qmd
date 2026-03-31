@@ -1,0 +1,99 @@
+---
+title: "protein_protein_analysis"
+format: html
+editor: visual
+---
+
+# Protein Protein Genetic Correlations
+
+With the SOLAR analysis results performed for all proteins protein associations, identify the genetic and environmental correlations.
+
+### Load Libraries
+
+```{r}
+library(tidyr)
+library(dplyr)
+
+#Network graphs
+library(igraph)
+library(ggraph)
+library(tidygraph)
+```
+
+### Load data
+
+Loading the collated csv from the solar analysis results
+
+```{r}
+prot_data <- read.delim("/users/k25046756/Twins_Project/data/protein_protein_solar/prot_summary_heritability_COMPLETE.csv")
+```
+
+```{r}
+#Use FDR adjustment
+prot_data_fdr <- prot_data %>%
+  mutate(
+    rhoG_FDR = p.adjust(rhoG_p0, method = "fdr"),
+    rhoE_FDR = p.adjust(rhoE_p, method = "fdr")
+  )
+
+#Filter FDR <0.05 for genetic hits
+
+prot_gen_0.1_hits <- prot_data_fdr %>%
+  filter(h2r1 > 0.1 & h2r2 > 0.1 & rhoG_FDR < 0.05)
+```
+
+### Graphing
+
+Network Graphs
+
+```{r}
+prot_edges <- prot_gen_0.1_hits %>%
+  filter(abs(rhoG) > 0.3) %>%  #
+  mutate(weight = abs(rhoG)) %>%
+  select(from = trait1, to = trait2, weight, rhoG)
+
+g_prot_s <- graph_from_data_frame(prot_edges, directed = FALSE)
+
+cl_prot_s <- cluster_louvain(g_prot_s, weights = E(g_prot_s)$weight)
+
+plot(cl_prot_s, g_prot_s,
+     vertex.size  = 3,
+     vertex.label.cex = 0.8, 
+     vertex.label.dist= 0.5,
+     edge.width   = 1,
+     main = "Protein-Protein Genetic Correlation Network\n(Blue=positive, Red=negative rhoG)"
+)
+```
+
+Cleaner Graph
+
+```{r}
+#Tidygraph
+tg_prot <- tbl_graph(
+  nodes = data.frame(
+    name = V(g_prot_s)$name, 
+    module = membership(cl_prot_s)  
+  ),
+  edges = prot_edges %>%          
+    rename(weight = weight),       
+  directed = FALSE
+)
+
+#Plotting with ggraph
+ggraph(tg_prot, layout = "fr") +
+  geom_edge_link(aes(width = weight, 
+                     color = rhoG),      
+                 alpha = 0.7) +
+  scale_edge_width(range = c(0.3, 2)) +
+  scale_edge_color_gradient2(low = "blue", mid = "grey", high = "red", 
+                            midpoint = 0) +
+  geom_node_point(aes(color = factor(module)), size = 4) +
+  geom_node_text(aes(label = name), repel = TRUE, size = 2.5, 
+                 max.overlaps = 20) +
+  theme_void() +
+  labs(title = "Protein-Protein Genetic Correlation Network",
+       subtitle = "Edge color = rhoG (blue=positive, red=negative)",
+       edge_color = "rhoG",
+       color = "Module") +
+  guides(edge_width = "none")
+```

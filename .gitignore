@@ -1,0 +1,23 @@
+# --- Ignore Data & Software ---
+data/
+logs/
+software/
+lmer_testing/
+raw_olink_ip/
+results/
+solar_chunks/
+
+# --- Ignore R/Project Artifacts ---
+.RData
+.Rhistory
+.Rproj.user/
+*.Rproj
+.Ruserdata
+
+# --- Enable scripts ---
+!scripts/**/*.R
+!scripts/**/*.qmd
+!scripts/**/*.sh
+!scripts/**/*.sub
+!README.md
+!LICENSE

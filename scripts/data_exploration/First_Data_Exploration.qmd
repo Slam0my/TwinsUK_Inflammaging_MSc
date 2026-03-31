@@ -26,7 +26,7 @@ library(dplyr) # For dataframe manipulation
 Double checking the working directory location
 
 ```{r}
-getwd() # Prints working directory
+setwd("/users/k25046756/Twins_Project/scripts/data_exploration")
 ```
 
 ------------------------------------------------------------------------
@@ -39,7 +39,7 @@ This file contains the large matrix of immunophenotypes and inflammatory protein
 
 ```{r}
 # Loading/Restoring the dataset from personal directory to current Global Environment
-load("/users/k25046756/Twins_Project/raw_olink_ip/data/dataset.RData")
+load("/users/k25046756/Twins_Project/data/raw_olink_ip/data/dataset.RData")
 ```
 
 After loading, dataset.RData contains two objects; dataset and info.
@@ -293,6 +293,8 @@ Could make a boxplot graph for the bmis of total cohort, mz then dz
 
 Note: Check if twins got tested on different plates/times.
 
+What about the season covariate? is it evenly distributed? if there were more twins measured in winter/summer how might allergies or seasonal immune boost affect it?
+
 ## 3. 'Olink_associations.RData' Exploration
 
 This file contains the Olink association results and contains the objects: acc_list, infoF, olink_ass, olink_modules and tr.
@@ -300,7 +302,7 @@ This file contains the Olink association results and contains the objects: acc_l
 ### 3.1 Loading the data
 
 ```{r}
-load("/users/k25046756/Twins_Project/raw_olink_ip/results/Olink_associations.RData")
+load("/users/k25046756/Twins_Project/data/raw_olink_ip/results/Olink_associations.RData")
 ```
 
 The data frame tr is the focus of the project as it contains the FDR-significant results including the beta, se, p-values corresponding with the summary association statistics.
@@ -363,4 +365,3 @@ sessionInfo()
 # 4. FDR Associations
 
 Finding the top 5% of Protein-cell associations. The tr data frame will be used as it contains the statistical values of all instead of the individual csv files. All of which are already statistically significant. The tr data frame already has q values in the last column so there are 18,629 statistically significant entries.
- 

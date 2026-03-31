@@ -1,10 +1,10 @@
 #Generating a list containing all of the IP pairs to be used for automation within the SOLAR heritability analysis.
 #For this, we only want to use those that were genetically significant 0.1 h2r hits (to save computational and analysis time)
 
-setwd("/users/k25046756/Twins_Project/Rsolar/solar_analysis/scripts/")
+setwd("/users/k25046756/Twins_Project/scripts/solar_analysis/")
 
 #Loading the saved data frame that contains all the IP  names 
-load("/users/k25046756/Twins_Project/Rsolar/solar_analysis/scripts/solar_analysis_filtering_results.RData")
+load("/users/k25046756/Twins_Project/scripts/solar_analysis/solar_analysis_filtering_results.RData")
 
 #Library
 library(dplyr)
@@ -23,6 +23,6 @@ nrow(pair_list)
 
 
 #Saving it as a csv
-write.csv(pair_list, "/users/k25046756/Twins_Project/Rsolar/ip_ip_solar/gen_0.1/data/gen_pair_list.csv", row.names = FALSE, quote = FALSE)
+write.csv(pair_list, "/users/k25046756/Twins_Project/data/solar_analysis/pair_list.csv", row.names = FALSE, quote = FALSE)
 
 nrow(pair_list)

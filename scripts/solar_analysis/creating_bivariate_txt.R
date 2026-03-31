@@ -3,7 +3,10 @@
 
 #Import the pair list to be used 
 #18629 pairs
-pairs <- read.csv("/users/k25046756/Twins_Project/Rsolar/solar_analysis/data/pair_list.csv")  
+pairs <- read.csv("/users/k25046756/Twins_Project/data/solar_analysis/pair_list.csv")  
+
+#Make a directory for our chunks
+dir.create("/users/k25046756/Twins_Project/scripts/solar_analysis/solar_chunks", recursive = TRUE, showWarnings = FALSE)
 
 #As this is a heavy job, split the pairs into chunks to run parallel jobs
 #Trying 200 pairs per chunk
@@ -23,12 +26,12 @@ for (start in seq(1, nrow(pairs), by = chunk_size)) {
   
   chunk_pairs <- pairs[start:end, ]
   
-  batch_file <- paste0("/users/k25046756/Twins_Project/Rsolar/solar_analysis/scripts/solar_chunks/bivariate_chunk_"
+  batch_file <- paste0("/users/k25046756/Twins_Project/scripts/solar_analysis/solar_chunks/bivariate_chunk_"
                        , chunk_id, ".txt")
 
 #This is what will be written for SOLAR at the beginning
-cat("load pedigree /users/k25046756/Twins_Project/Rsolar/solar_analysis/data/twinsuk_pedigree.csv\n", file=batch_file)
-cat("load phenotypes /users/k25046756/Twins_Project/Rsolar/solar_analysis/data/twinsuk_phenotypes.csv\n", file=batch_file, append=TRUE)
+cat("load pedigree /users/k25046756/Twins_Project/data/solar_analysis/twinsuk_pedigree.csv\n", file=batch_file)
+cat("load phenotypes /users/k25046756/Twins_Project/data/solar_analysis/twinsuk_phenotypes.csv\n", file=batch_file, append=TRUE)
 
 #Looping the model commands with all pairs as inputs
 

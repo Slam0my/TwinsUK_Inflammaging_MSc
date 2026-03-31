@@ -1,10 +1,10 @@
 #Creating the pedigree file
 
-setwd("/users/k25046756/Twins_Project/Rsolar/solar_analysis/data/")
+setwd("/users/k25046756/Twins_Project/data/solar_analysis/")
 
 
 #Loading the dataset containing the information
-load("/users/k25046756/Twins_Project/raw_olink_ip/data/dataset.RData")
+load("/users/k25046756/Twins_Project/data/raw_olink_ip/data/dataset.RData")
 
 #Loading library
 library(dplyr)

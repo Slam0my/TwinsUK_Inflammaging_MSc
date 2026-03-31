@@ -1,15 +1,15 @@
 #Phenotype Creation
 
-setwd("/users/k25046756/Twins_Project/Rsolar/solar_analysis/data/")
+setwd("/users/k25046756/Twins_Project/data/solar_analysis/")
 
 
 #Loading the dataset containing the information
-load("/users/k25046756/Twins_Project/raw_olink_ip/data/dataset.RData")
+load("/users/k25046756/Twins_Project/data/raw_olink_ip/data/dataset.RData")
 
 #load("/scratch/users/k25046756/Twins_Project/raw_olink_ip/results/Olink_associations.RData")
 
 #To make sure the ids in pedigree.csv matches the ids here (removing the singletons)
-ped <- read.csv("/users/k25046756/Twins_Project/Rsolar/solar_analysis/data/twinsuk_pedigree.csv")
+ped <- read.csv("/users/k25046756/Twins_Project/data/solar_analysis/twinsuk_pedigree.csv")
 ped_ids <- ped$id
 
 

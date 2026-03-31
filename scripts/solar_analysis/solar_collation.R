@@ -5,10 +5,10 @@ library(stringr)
 library(dplyr)
 
 #Set working directory
-setwd("/users/k25046756/Twins_Project/Rsolar/solar_analysis/data")
+setwd("/users/k25046756/Twins_Project/data/solar_analysis")
 
 #In /results there are separate directories for each job_chunk_
-job_chunks <- list.files("/users/k25046756/Twins_Project/Rsolar/solar_analysis/results",
+job_chunks <- list.files("/users/k25046756/Twins_Project/results/solar_analysis",
                       pattern ="job_chunk_", full.names=TRUE)
 
 #Save as data frame (empty to store results)
