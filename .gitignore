@@ -4,8 +4,7 @@ logs/
 software/
 lmer_testing/
 raw_olink_ip/
-results/protein_protein_solar/  
-results/solar_analysis/
+results/
 solar_chunks/
 
 # --- Ignore R/Project Artifacts ---
