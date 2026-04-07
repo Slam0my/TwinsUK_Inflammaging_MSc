@@ -31,7 +31,7 @@ library(pheatmap) #Heatmap
 summary_results<- read.delim("~/Twins_Project/data/solar_analysis/summary_heritability.csv")
 
 #Loading in the dataset for sup.lineage information 
-load("/users/k25046756/Twins_Project/data/raw_olink_ip/results/Olink_associations.RData")
+load("~/Twins_Project/data/raw_olink_ip/results/Olink_associations.RData")
 ```
 
 ## 2. Filtering of Significant IP-Protein Associations
@@ -55,7 +55,7 @@ summary_results_fdr <- summary_results %>%
 Using Sup.Lineage as it contains T cells, NK cells, monocytes, dendritic cells, B cells to determine the IP lineages.
 
 ```{r}
-#Need to clean the IMMUNO_X.new names to match summary_result_fdr as it doesnt have .new 
+#Need to clean the IMMUNO_X.new names to match summary_result_fdr as it doesnt have .new
 infoF_clean <- infoF %>%
   mutate(SET.NAME_clean = gsub("\\.new$", "", SET.NAME)) %>%
   distinct(SET.NAME_clean, .keep_all = TRUE)
@@ -145,7 +145,7 @@ save.image(file = "solar_analysis_filtering_results.RData")
 Defining an output path where I will save the visualisations generated to.
 
 ```{r}
-output_path <- "~/Twins_Project/results/visualisations"
+output_path <- "~/Twins_Project/visualisations"
 ```
 
 ### 3.1 Protein Distribution
@@ -343,13 +343,15 @@ ggsave(
 )
 ```
 
+NOTE: INSTEAD OF SUP.LINEAGE GO FOR LINEAGR OR SUB.LINEAGE
+
 ### 4.3 Summary Table
 
 Summary table from the fdr results based on correlation types for quantification.
 
 ```{r}
 summary_table <- summary_results_fdr_points %>%
-  mutate(across(where(is.numeric), ~ round(., 3)))
+  mutate(across(where(is.numeric), ~ round(., 3))) %>%
   group_by(Sig_Type) %>%
   summarise(
     n = n(),
@@ -479,6 +481,10 @@ shared_protein_ip_env
 ## 8. Both Genetic and Environmentally Correlated
 
 All hits are positive. Only CXCL9 protein has IP associations.
+
+Overall CXCL9 had the phenotype pP correlation.
+
+Deriving from genetic pG and environmental pE but rhoG is stronger/more dominant than rhoE.
 
 ```{r}
 #Plotting with different graph

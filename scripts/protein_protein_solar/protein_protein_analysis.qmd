@@ -6,7 +6,7 @@ editor: visual
 
 # Protein Protein Genetic Correlations
 
-With the SOLAR analysis results performed for all proteins protein associations, identify the genetic and environmental correlations.
+With the SOLAR analysis results performed for all proteins protein associations, identify the genetic and environmental correlations. The SOLAR ran for protein-protein associations used the twins to identify whether they share the same proteins
 
 ## 1. Set Up
 
@@ -27,7 +27,7 @@ library(tidygraph)
 Loading the collated csv from the solar analysis results
 
 ```{r}
-prot_data <- read.delim("/users/k25046756/Twins_Project/data/protein_protein_solar/prot_summary_heritability_COMPLETE.csv")
+prot_data <- read.delim("~/Twins_Project/data/protein_protein_solar/prot_summary_heritability_COMPLETE.csv")
 ```
 
 ### 1.3 Save path
@@ -35,7 +35,7 @@ prot_data <- read.delim("/users/k25046756/Twins_Project/data/protein_protein_sol
 Defining an output path where I will save the visualisations generated to.
 
 ```{r}
-output_path <- "~/Twins_Project/results/visualisations"
+output_path <- "~/Twins_Project/visualisations"
 ```
 
 ## 2. Filtering
@@ -84,7 +84,7 @@ tg_prot <- tbl_graph(
   directed = FALSE
 )%>%
   activate(nodes) %>% #for proteins not the edges
-  mutate(Importance = centrality_degree()) #importance proteins correlated with lots more other proteins 
+  mutate(Centrality = centrality_degree()) #Proteins correlated with lots more other proteins -> number of edges connected to each node
 #allows to idnetify 'hub' proteins with lots of connections and 'specialist' proteins connected to another or few
 
 
@@ -97,7 +97,7 @@ viridis_colours <- viridis(n_mods)
 ggraph(tg_prot, layout = "fr") +
   #Nodes and edges
   geom_edge_link(aes(width = weight, edge_colour = rhoG),alpha = 0.8) +
-  geom_node_point(aes(color = as.factor(module), size = Importance), alpha = 1)+
+  geom_node_point(aes(color = as.factor(module), size = Centrality), alpha = 1)+
   #Colour
 scale_edge_colour_gradient(low = "black", high = "grey80") +
   scale_color_manual(values = viridis_colours, name = "Module")+
@@ -106,6 +106,8 @@ scale_edge_colour_gradient(low = "black", high = "grey80") +
   #Aesthetics, layouts
   theme_void() +
   theme(
+   plot.background = element_rect(fill = "white", color = NA),
+   panel.background = element_rect(fill = "white", color = NA),
    plot.title = element_text(hjust = 0.5,face = "bold", size = 14),
    plot.subtitle = element_text(hjust = 0.5, size = 11),
    #space for legend
@@ -129,4 +131,52 @@ ggsave(
 )
 ```
 
+The lines/edges represent genetic corerelation RhoG (pG) -\> shared genetic influence / relationship between two proteins.
+
+The size of the points represent centrality which is how many connections/neighbours a proteins has -\> how integrated the protein is in the network.
+
+Colours represent modules -\> how groups of proteins are highly correlated with each other.
+
 SCF and CCL20 are the only protein pair to have a negative rhoG however, when searching, they should have a positive correlations so the results seem speculative...
+
+```{r}
+#ADDS IN CIRCLES AROUND BUT DONT REALLY NEED AS WE ALREADY HAVE COLOURS IN PLACE FOR THE MODULES
+library(ggforce) 
+
+
+n_mods <- length(unique(V(tg_prot)$module))
+viridis_colours <- viridis(n_mods)
+
+ggraph(tg_prot, layout = "fr") +
+  
+  geom_mark_hull(aes(x = x, y = y,fill = as.factor(module), label = as.factor(module)), 
+                 concavity = 5,   #Higher concavity makes tighter hulls
+                 radius = unit(0.3, "cm"),  #Smoothing
+                 alpha = 0.05,    
+                 colour = "grey80", 
+                 expand = unit(0.5, "cm"), 
+                 label.size = 3) + 
+  
+  
+  geom_edge_link(aes(width = weight, edge_colour = rhoG), alpha = 0.5) +
+  geom_node_point(aes(color = as.factor(module), size = Centrality), alpha = 0.8) +
+  
+  scale_edge_colour_gradient(low = "black", high = "grey90") +
+  
+
+  scale_fill_manual(values = viridis_colours, guide = "none") + 
+  scale_color_manual(values = viridis_colours, name = "Module") +
+  
+  geom_node_text(aes(label = name), repel = TRUE, size = 1.8, max.overlaps = 12) +
+  theme_void() +
+  labs(
+    title = "Protein-Protein Genetic Correlation Network",
+    subtitle = "Based on SOLAR analysis results (Grouping Hulls Added)",
+    edge_colour = "rhoG",
+    color = "Module",
+    size = "Centrality"
+  ) +
+  guides(edge_width = "none")
+```
+
+If I make this interactive, can adjust the filtering of rhoG \>0.5 but will risk overcrowded visualisations.
