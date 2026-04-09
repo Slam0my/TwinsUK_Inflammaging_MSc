@@ -11,7 +11,7 @@ This repository is part of an extended research project for the MSc Applied Bioi
 ## <a id="repostructure"></a> Repository Structure 
 All Bioinformatics pipeline was conducted on the CREATE HPC. Data, results, logs and software directories have been omitted.
 - `data/`
-Directory containing all of the data used in the workflow. This includes CSVs and a copy of the raw data. 
+- Directory containing all of the data used in the workflow. This includes CSVs and a copy of the raw data. 
   - `raw_olink_ip/`
     - Contains the raw, original data. Untouched, READ-ONLY.
   - `associations_test/`
@@ -23,6 +23,7 @@ Directory containing all of the data used in the workflow. This includes CSVs an
   - olink.test.list
     - TXT file containing a list of all the olink proteins.
 - `scripts/`
+- Directory for all R and shell scripts.
   - `data_exploration/`
     - The initial exploration of the Olink proteomic results containing IP-Protein Associations.
   - `lmer_testing/`
@@ -39,16 +40,18 @@ Directory containing all of the data used in the workflow. This includes CSVs an
       - `solar_chunks/`
           - TXT files containing SOLAR commands for submitting pairs.
 - `results/`
-  Directory designated for SOLAR analysis outputs.
+- Directory designated for SOLAR analysis outputs.
   - `protein_protein_solar/`
     - job_chunk_1-200 directories with SOLAR outputs. Missing pairs from batching were performed here separately.
   - `solar_analysis/ `
     - job_chunk_1-200 directories with SOLAR outputs. Missing pairs from batching were performed here separately.
 - `logs/`
-  Directory designated for SOLAR analysis logs.
+- Directory designated for SOLAR analysis logs.
+  - `protein_protein_solar/`
+  - `solar_analysis/ `
 - `software/`
-Directory for the SOLAR package installation (solar-eclipse-9.0.1-static-Linux).
+- Directory for the SOLAR package installation (solar-eclipse-9.0.1-static-Linux).
 - `visualisations/`
-All graphical and visual outputs from analysis.
+- All graphical and visual outputs from analysis.
 
 
