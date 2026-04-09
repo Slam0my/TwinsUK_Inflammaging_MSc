@@ -9,7 +9,7 @@ This repository is part of an extended research project for the MSc Applied Bioi
 
 
 ## <a id="repostructure"></a> Repository Structure 
-All Bioinformatics pipeline was conducted on the CREATE HPC. Data, results, logs and software directories have been omitted.
+All Bioinformatics pipeline was conducted on the CREATE HPC. Data, results, logs and software directories have been omitted from this GitHub Repository.
 - `data/`
 - Directory containing all of the data used in the workflow. This includes CSVs and a copy of the raw data. 
   - `raw_olink_ip/`
