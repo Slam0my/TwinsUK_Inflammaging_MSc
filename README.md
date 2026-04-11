@@ -1,4 +1,4 @@
-# Identification of Early Insigators of Inflammaging Within the TwinsUK Cohort
+# Identification of Early Instigators of Inflammaging Within the TwinsUK Cohort
 - [Introduction](#introduction) 
 - [Repository Structure](#repostructure)
 
