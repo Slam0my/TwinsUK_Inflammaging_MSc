@@ -1,0 +1,356 @@
+---
+title: "basic_visualisations"
+author: "Sarah Lam"
+format: html
+editor: visual
+---
+
+# Visualising Genetic Correlations
+
+From the SOLAR analysis significant genetic results, we want to obtain IP-IP and Protein-Protein genetic correlations. This could be represented in a network graph.
+
+# 1. Set up
+
+## 1.1 Libraries
+
+```{r, message=FALSE}
+library(tidyr)
+library(dplyr)
+library(pheatmap) #static
+
+library(tibble)
+library(viridis) #Colour blind friendly palette
+library(ggplot2)
+
+#Network graphs
+library(igraph)
+library(ggraph)
+library(tidygraph)
+
+library(tidyverse)
+```
+
+## 1.2 Data Loading
+
+```{r}
+#Loading in the solar results analysis filtering.
+load("~/Twins_Project/scripts/solar_analysis/solar_analysis_filtering_results.RData")
+
+#Loading in the dataset for .lineage information 
+#sup.lineage 
+load("~/Twins_Project/data/raw_olink_ip/results/Olink_associations.RData")
+```
+
+As a reminder, genetic_0.1_hits, genetic_0.3_hits, environmental_hits and both_hits are FDR filtered 0.05.
+
+gen_env_0.1 and gen_env_0.3 are genetically correlated with environmental correlations.
+
+env_gen is environmentally correlated with genetic correlations.
+
+sum_results_combined contains the FDR filtered plus lineage columns.
+
+## 1.3 Save path
+
+Defining an output path where I will save the visualisations generated to.
+
+```{r}
+output_path <- "~/Twins_Project/visualisations"
+```
+
+# 2. IP-Protein Genetics Network graph
+
+Starting with the genetic hits as early instigators have a genetic basis, where they are likely from ageing.
+
+Filtering IPs that share proteins and graphing for visualisations.
+
+Using the already genetically significant filtered genetic_0.1_hits (h2r1 \> 0.1 & h2r2 \> 0.1 & rhoG_FDR \< 0.05), we know the IP-Protein associations are genetically linked.
+
+## 2.1 Matrix
+
+Conversion of the genetic_0.1_hits is necessary from a long to wide format with rows as IPs, columns as proteins and entries as RhoG (pG) . There will be lots of NAs as the majority of IPs do not significnatly associate with 2+ proteins.
+
+Problem is that not all IPs share multiple proteins, 1464 IPs are unique to one protein but the rest (2836) are significantly correlated to 2+ proteins.
+
+```{r}
+#Matrix conversion from genetic_0.1_hits
+#Using RhoG for the biological connection / proximity as it is already filtered
+#Based on shared proteins
+g01_long <- genetic_0.1_hits %>%
+  select(trait1, trait2, rhoG)%>%
+  mutate(
+    IP = if_else(grepl("^IMMUNO_",trait1), trait1, trait2),
+    protein = if_else(grepl("^IMMUNO_", trait1), trait2, trait1)
+  ) %>%
+  filter(grepl("^IMMUNO_", IP)) %>% 
+  select(IP, protein, rhoG)
+
+IP_protein_mat <- g01_long %>%
+  pivot_wider(
+    names_from  = protein,
+    values_from = rhoG
+  ) %>%
+  column_to_rownames("IP") %>%
+  as.matrix()
+
+# number of non-NA proteins per IP
+n_proteins_per_IP <- rowSums(!is.na(IP_protein_mat))
+
+#Filter IPs that have 2+ protein associations, the rest are unique to one protein
+#Filtering for 2+ proteins allows us to identify master regulations and identify where one instigator IP controls multiple responder proteins
+min_proteins <- 2
+keep_IPs <- names(n_proteins_per_IP)[n_proteins_per_IP >= min_proteins]
+
+IP_protein_mat_filt <- IP_protein_mat[keep_IPs,]
+```
+
+# 3. IP-IP Genetic Associations
+
+New method: Finding the genetic associations/correlations between IP and IP .
+
+Ideally, I would run IP-IP SOLAR on all IPs to find the genetic correlations but it is too computationally intensive. Instead, using the already genetically filtered genetic_0.1_hits where we know IP-Protein associations were heritable, we can take the selected IPs (4300) then that has been narrowed down to identify only IPs that share 2+ proteins, disregarding those unique to just one, and build IP profiles across proteins. Find IP-IP correlations between rows. However this doesn't mean IP-IP are directly genetically correlated as they could be connected to the protein through different genetic pathways. This can only infer/estimate but not a direct result.
+
+If I use this way to find the genetic associatiosn with IP-IP then wouldn't I also need to apply this logic/step to protein-protein associations as well?
+
+-   Genetic Correlation with **Pearsons**
+
+    -   As we used SOLAR to prove those associations were genetically driven, we can use Pearson to map the observed strength of the associations.
+
+-   Genetic Correlations building on the SOLAR protein-protein network results with **Jaccard similarity**
+
+    -   if IP 1 is associated with protein x and IP 2 is associated with protein Y and the current network shows protein x and y have high pG, then IP 1 and 2 are genetically correlated by proxy.
+
+    -   But this method relies on the SOLAR results which may not be representative?
+
+    -   This would involve (1) creating IP-Protein mapping matrix and 1 if SOLAR associated, 0 if not , (2) using exisiting protein-protein matrix , (3) multiply them ip-protein matrix x protein-protein matrix
+
+    -   I need to find IPs that share the SAME proteins sets.
+
+    -   However, this may be down to sharing the same cell lineage which is a known relationship.
+
+With finding the IP-IP matrix, there is potential to explore the cell lineages.
+
+## 3.1 Pearson's Correlation
+
+Creates a large IP-IP matrix
+
+```{r}
+#IP-IP associations through pearsons correlation for genetic similarities based on proteins
+#Pearsons based on pG patterns across proteins
+IP_IP_cor <- cor(t(IP_protein_mat_filt),
+                 use   = "pairwise.complete.obs",
+                 method = "pearson")
+
+
+#Dimensions are 923 so 923 hub IPs -> potential master regulators 
+dim(IP_IP_cor)
+```
+
+Something is wrong with the matrix as lots of 1s when it should not be
+
+```{r}
+#from correlation matrix, create edges
+IP_edges <- IP_IP_cor %>%
+  as.data.frame() %>%
+  rownames_to_column("IP1") %>%
+  pivot_longer(-IP1, names_to = "IP2", values_to = "cor") %>%
+  filter(IP1 < IP2, cor > 0.5, !is.na(cor))  #Can change threhold and is only positive # 0.25? But with too many pairs to visualise
+
+#changed the correlation to 0.7 and 0.5 was messy
+g_IP <- graph_from_data_frame(IP_edges, directed = FALSE)
+
+#Modules
+cl_ip <- cluster_louvain(g_IP, weights = IP_edges$cor)
+
+#Tidygraph
+tg_ip <- tbl_graph(
+  nodes = data.frame(
+    name=V(g_IP)$name, 
+    module=membership(cl_ip)),
+  edges = IP_edges %>% rename(weight = cor), 
+  directed=FALSE)
+
+#Plotting with ggraph
+ggraph(tg_ip, layout="fr") +
+  geom_edge_link(aes(color = factor(to), width=log(weight + 1.1 )),
+                 alpha=0.5, 
+                 start_cap = circle(3,'mm'),
+                 end_cap = circle(3, 'mm')) +
+  scale_edge_width(range = c(0.5, 2.5)) +
+  geom_node_point(aes(color=factor(module)), size=2, alpha = 0.5) +
+  geom_node_text(aes(label=name), repel=TRUE, size=2) +
+  theme_void() +
+  labs(title="IP Genetic Similarity Modules")
+```
+
+hard to visualise
+
+filter by lineage as graph crashes too much memory
+
+## 3.2 Jaccard Similarity
+
+### 3.2.1 Shared Protein Distribution
+
+Displaying the distribution again from the previous qmd
+
+```{r}
+#Counting how many share proteins
+ip_gen_sharing <- genetic_0.1_hits %>%
+  group_by(trait1) %>%
+  summarise(protein_count = n()) %>%
+  arrange(desc(protein_count))
+
+#Table
+shared_protein_ip_gen <- table(ip_gen_sharing$protein_count)
+
+shared_protein_ip_gen
+```
+
+### 3.2.2 Jaccard Similairty
+
+Calculating the same sharing with the Jaccard similarity index
+
+```{r}
+#List of all unique ip-protein pairs 
+ip_links <- g01_long %>%
+  select(IP, protein) %>%
+  distinct()
+
+#Counting how many we have
+ip_totals <- ip_links %>%
+  count(IP, name = "total_proteins")
+
+#those that are sharing 
+ip_sharing <- ip_links %>%
+  inner_join(ip_links, by = "protein", relationship = "many-to-many") %>%
+  rename(IP_A = IP.x, IP_B = IP.y) %>%
+  filter(IP_A < IP_B) %>% #keep different IP pairs with the same protein
+  group_by(IP_A, IP_B) %>% #counting how mnay common proteins
+  summarise(shared_count = n(), .groups = "drop")
+
+#Jaccard Score caluculations
+ip_jaccard <- ip_sharing %>%
+  left_join(ip_totals, by = c("IP_A" = "IP")) %>%
+  left_join(ip_totals, by = c("IP_B" = "IP")) %>%
+  mutate(
+    jaccard_score = shared_count / (total_proteins.x + total_proteins.y - shared_count)
+  ) %>%
+  arrange(desc(jaccard_score))
+
+```
+
+But jaccard index measures overlap not absolute strength
+
+Those that share more proteins than those that only share one matter more for jaccard score.
+
+Thus, weighting and filtering are applied to quantify similarity with more nuance.
+
+```{r}
+weight_ip_jaccard <- ip_jaccard %>%
+  filter(shared_count > 1) %>% #Only keep pairs sharing 2+ proteins
+  mutate(weighted = jaccard_score * shared_count) %>%
+  arrange(desc(weighted))
+```
+
+### 3.2.3 Lineage Tracing
+
+From the Jaccard similarity results, if they have the same cell lineage then it is a known relationship so they must share the same proteins.
+
+If they derive from different lineages then there is a possibility that this is an instigator as they come from different pathways/parts of the immune system.
+
+```{r}
+#Need to select Ip and Sup.Lineage 
+lineage_ip <- genetic_0.1_hits %>%
+  select(IP=trait1, Sup.Lineage) %>%
+  distinct()
+
+#joining the lineage 
+ip_lineage_check <- weight_ip_jaccard %>%
+  left_join(lineage_ip, by = c("IP_A" = "IP")) %>%
+  rename(Lineage_A = Sup.Lineage) %>%
+  
+  left_join(lineage_ip, by = c("IP_B" = "IP")) %>%
+  rename(Lineage_B = Sup.Lineage) %>%
+  
+  mutate(Relationship = if_else(Lineage_A == Lineage_B, "Intra-Lineage", "Cross-Lineage")) %>%
+  filter(shared_count > 1) %>% #Applying filtering 
+  arrange(desc(weighted))
+
+head(ip_lineage_check, 20)
+```
+
+All of the IPs that have high scores are of the same lineage (intra-lineage). This is natural as strongest genetic signals are from the same family tree.
+
+**NOTE: Could investigate specific sub.lineage instead or the broader sup.lineage**
+
+Finding the top cross-lineage IPs
+
+```{r}
+top_cross_lineage <- ip_lineage_check %>%
+  filter(Relationship == "Cross-Lineage") %>%
+  filter(shared_count > 1) %>% 
+  arrange(desc(weighted))
+
+head(top_cross_lineage, 20)
+```
+
+## 3.3 Graphing 
+
+### 3.3.1 Network Graph 
+
+Graphing overall network
+
+Graphing inter lineage hits
+
+Graphing cross lineage hits
+
+```{r}
+
+```
+
+# 4. Protein-Protein Genetic Associations
+
+This is based on sharing IPS, not from a separate solar analysis.
+
+## 4.1 Pearson's Correlation
+
+```{r}
+protein_protein_cor <- cor(IP_protein_mat_filt ,
+                           use = "pairwise.complete.obs",
+                           method = "pearson")
+dim(protein_protein_cor)
+
+```
+
+Graphing
+
+```{r}
+protein_edges <- protein_protein_cor %>%
+  as.data.frame() %>%
+  rownames_to_column("protein1") %>%
+  pivot_longer(-protein1, names_to = "protein2", values_to = "cor") %>%
+  filter(protein1 < protein2,  cor > 0.25, !is.na(cor))
+
+g_prot <- graph_from_data_frame(protein_edges, directed = FALSE)
+
+#Modules
+cl_prot <- cluster_louvain(g_prot, weights = protein_edges$cor)
+
+#Tidygraph
+tg_prot <- tbl_graph(
+  nodes = data.frame(
+    name=V(g_prot)$name, 
+    module=membership(cl_prot)),
+  edges = protein_edges %>% rename(weight = cor), 
+  directed=FALSE)%>%
+  mutate(importance = centrality_degree())
+
+#Plotting with ggraph
+ggraph(tg_prot, layout="fr") +
+ geom_edge_link(aes(width=log(weight + 1)), color = "grey80", alpha=0.5) +
+  geom_node_point(aes(color=factor(module), size = importance), alpha = 0.8) +
+  scale_color_viridis_d(option = "viridis") + 
+  scale_size_continuous(range = c(2, 7)) +
+  geom_node_text(aes(label=name), repel=TRUE, size=2) +
+  theme_void() +
+  labs(title="Protein Genetic Similarity Modules")
+```

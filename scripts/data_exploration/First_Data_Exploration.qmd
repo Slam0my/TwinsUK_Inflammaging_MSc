@@ -16,7 +16,7 @@ The first data access and exploration for understanding and investigation before
 
 Installing the packages needed
 
-```{r}
+```{r, message = FALSE}
 library(ggplot2)# For visual plotting
 library(dplyr) # For dataframe manipulation
 ```
@@ -27,6 +27,14 @@ Double checking the working directory location
 
 ```{r}
 setwd("~/Twins_Project/scripts/data_exploration")
+```
+
+### 1.3 Save path
+
+Defining an output path where I will save the visualisations generated to.
+
+```{r}
+output_path <- "~/Twins_Project/visualisations"
 ```
 
 ------------------------------------------------------------------------
@@ -95,6 +103,7 @@ note : Perhaps can do a age plot with mz/dz distribution population pyramid plot
 ##### 2.3.2.1 Graphing Age distribution
 
 ```{r}
+dir.create(output_path, recursive = TRUE, showWarnings = FALSE)
 #setting the age group distribution 
 dataset_clean <- dataset %>%
   mutate(Age_Bin = cut(Age, breaks = seq(40, 80, by = 5),labels = c("40-44", "45-49", "50-54", "55-59", "60-64", "65-69", "70-74", "75-79"), right = FALSE))
@@ -119,7 +128,14 @@ age_zyg_plot<- ggplot(dataset_clean, aes(x = Age_Bin, fill = Z)) +
                     axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1)
                   )
 
-ggsave("raw_age_zyg_plot.png", width =8, height =5)
+#Saving plot
+ggsave(
+  plot = age_zyg_plot,
+  filename = "age_zyg_plot.png", 
+  path = output_path,
+  width = 10,     
+  height = 5
+)
 ```
 
 2.3.2.2 Remove unpaired twins.
@@ -173,7 +189,13 @@ age_zyg_plot<- ggplot(dataset_pairs, aes(x = Age_Bin, fill = Z)) +
                     axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1)
                   )
 
-ggsave("rm_age_zyg_plot.png", width =8, height =5)
+#Saving plot
+ggsave(
+  filename = "rm_age_zyg_plot.png", 
+  path = output_path,
+  width = 10,     
+  height = 5
+)
 ```
 
 #### 2.3.3 QC Warning
@@ -229,7 +251,13 @@ age_zyg_plot<- ggplot(dataset_clean, aes(x = Age_Bin, fill = Z)) +
                     axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1)
                   )
 
-ggsave("fn_age_zyg_plot.png", width =8, height =5)
+#Saving plot
+ggsave(
+  filename = "final_age_zyg_plot.png", 
+  path = output_path,
+  width = 10,     
+  height = 5
+)
 ```
 
 ```{r}
