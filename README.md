@@ -28,6 +28,7 @@ All Bioinformatics pipeline was conducted on the CREATE HPC. Data, results, logs
     - The initial exploration of the Olink proteomic results containing IP-Protein Associations.
   - `lmer_testing/`
     - Scripts for performing the linear mixed-effects model (LMM).
+    - Originally developed by Niccolò Rossi and adapted in this project.
     - `copy_helper_functions/`
       - Normalisation and lmer return regression coefficients scripts to call.
   - `protein_protein_solar/`
