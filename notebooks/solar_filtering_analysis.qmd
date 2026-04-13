@@ -34,6 +34,14 @@ summary_results<- read.delim("~/Twins_Project/data/solar_analysis/summary_herita
 load("~/Twins_Project/data/raw_olink_ip/results/Olink_associations.RData")
 ```
 
+### 1.3 Save path
+
+Defining an output path where I will save the visualisations generated to.
+
+```{r}
+output_path <- "~/Twins_Project/visualisations"
+```
+
 ## 2. Filtering of Significant IP-Protein Associations
 
 ### 2.1 FDR Adjusted Filtering
@@ -62,7 +70,7 @@ infoF_clean <- infoF %>%
 
 #Combining the lineage columns to the summary results dataframe
 sum_results_combined <- summary_results_fdr %>%
-  left_join(infoF_clean %>% select(SET.NAME_clean, Sup.Lineage), 
+  left_join(infoF_clean %>% select(SET.NAME_clean, Lineage, Sup.Lineage, Sub.Lineage), 
             by = c("trait1" = "SET.NAME_clean"))
 ```
 
@@ -89,6 +97,12 @@ genetic_0.5_hits <- sum_results_combined %>%
 ```
 
 #### 2.3.2 Environmental hits
+
+Only accounting for rhoE as h2r can be low or high
+
+environmental_hits \<- sum_results_combined %\>%
+
+filter(rhoE_FDR \< 0.05)
 
 ```{r}
 #Only accounting for rhoE as h2r can be low or high 
@@ -141,12 +155,6 @@ save.image(file = "solar_analysis_filtering_results.RData")
 ```
 
 ## 3. Exploration of the filtered results
-
-Defining an output path where I will save the visualisations generated to.
-
-```{r}
-output_path <- "~/Twins_Project/visualisations"
-```
 
 ### 3.1 Protein Distribution
 
@@ -201,6 +209,8 @@ ggsave(
 ```
 
 In the 0.1 and 0.3 top hits, find what proteins are most frequent/popular for genetic. Observing whether there are changes in protein frequency patterns.
+
+45 proteins
 
 ### 3.2 Genetic h2r 0.1 filtered hits
 
@@ -343,7 +353,7 @@ ggsave(
 )
 ```
 
-NOTE: INSTEAD OF SUP.LINEAGE GO FOR LINEAGR OR SUB.LINEAGE
+NOTE: SUB.LINEAGE investigations needed
 
 ### 4.3 Summary Table
 
@@ -391,7 +401,6 @@ conv_matrix <- function(df, value_col) {
   
   return(mat)
 }
-   
 ```
 
 ## 6. Genetic Hits Analysis
@@ -407,7 +416,7 @@ genetic_matrix <- conv_matrix(genetic_0.1_hits, "rhoG")
 
 genetic_heatmap<-pheatmap(
             t(genetic_matrix), #transpose so x axis is IP and protein on Y 
-            color = viridis(100),
+            color = colorRampPalette(c("#440154FF", "#e8e8e8", "#21908CFF"))(100),
             cluster_rows = TRUE,
             cluster_cols = TRUE,
             fontsize_row = 6,
@@ -418,6 +427,7 @@ genetic_heatmap<-pheatmap(
             main = "Genetic Correlations (IP vs Proteins)",
             border_color = NA
           )
+
 genetic_heatmap
 ```
 
@@ -444,12 +454,14 @@ Environmental markers - reactive in response externally. Likely not realted to a
 
 ### 7.1 Heatmap
 
+"#21908CFF"
+
 ```{r}
 environmental_matrix <- conv_matrix (environmental_hits, "rhoE")
 
 env_heatmap<-pheatmap(
             environmental_matrix,
-            color = viridis(100),
+            color = colorRampPalette(c("#440154FF", "#e8e8e8", "#21908CFF"))(100),
             cluster_rows = TRUE,
             cluster_cols = TRUE,
             fontsize_row = 6,
@@ -492,13 +504,39 @@ both_dual <- both_hits %>%
   mutate(IP = reorder(trait1, abs(rhoG))) %>%
   select(IP, Protein = trait2, rhoG, rhoE)
 
-#Lollipop graph to show both rhoG and rhoE
+#For the graph mean + sd visuals
+stats_rhoG <- both_hits %>%
+  summarise(mean = mean(rhoG), sd = sd(rhoG)) %>%
+  mutate(min = mean - sd, max = mean + sd)
+stats_rhoE <- both_hits %>%
+  summarise(mean = mean(rhoE), sd = sd(rhoE)) %>%
+  mutate(min = mean - sd, max = mean + sd)
+
+#Dumbell graph to show both rhoG and rhoE
 ggplot(both_dual, aes(x = reorder(IP, abs(rhoG)))) +
+  
+  #Mean +sd
+  geom_rect(aes(xmin = -Inf, xmax = Inf, 
+                ymin = stats_rhoG$min, ymax = stats_rhoG$max), 
+            fill = "#440154FF", alpha = 0.02) +
+  geom_rect(aes(xmin = -Inf, xmax = Inf, 
+                ymin = stats_rhoE$min, ymax = stats_rhoE$max), 
+            fill = "#21908CFF", alpha = 0.02) +
+  geom_hline(yintercept = stats_rhoG$mean, color = "#440154FF", linetype = "solid", alpha = 0.4) +
+  geom_hline(yintercept = stats_rhoE$mean, color = "#21908CFF", linetype = "solid", alpha = 0.4) +
+  #label for mean +sd
+  annotate("text", x = 1, y = stats_rhoG$mean, label = "MEAN", 
+           angle = 90, size = 2.5, color = "#440154FF", vjust = -1, hjust = -0.2) +
+  annotate("text", x = 1, y = stats_rhoG$max+0.02, label = "STDEV", 
+           angle = 90, size = 2.5, color = "#440154FF", vjust = -1, hjust = -0.2) +
+           
+  
   geom_segment(aes(xend = IP, y = rhoG, yend = rhoE), color = "grey85", size = 1) +
-  geom_point(aes(y = rhoG, color = "Genetic (ρG)"), size = 3) +
-  geom_point(aes(y = rhoE, color = "Environmental (ρE)"), size = 3) +
+  geom_point(aes(y = rhoG, color = "Genetic (ρG)"), size = 5) +
+  geom_point(aes(y = rhoE, color = "Environmental (ρE)"), size = 5) +
+  scale_y_continuous(expand = c(0, 0), limits = c(0, 0.6)) + #x axis
   coord_flip() +
-  scale_color_viridis_d(option = "D", begin = 0.2, end = 0.8)+
+  scale_color_manual(values = c("#21908CFF","#440154FF"))+
   labs(
     title = "Both Genetic + Environmental Correlations",
     subtitle = "Only CXCL9 had IPs significant in both genetic and environmental correlations.",
@@ -506,10 +544,31 @@ ggplot(both_dual, aes(x = reorder(IP, abs(rhoG)))) +
     color = "Correlation Type"
   ) +
   theme_minimal() +
-  geom_hline(yintercept = 0, linetype = "dashed", alpha = 0.5)
+    theme(
+    legend.position = "right",
+    plot.title = element_text(face = "bold", hjust = 0.5),
+    axis.title = element_text(size = 11, face = "bold"),
+    axis.text = element_text(size = 10),
+    axis.line = element_line(color = "black"))
+
+
+#Saving plot
+ggsave(
+  filename = "dumbell_both_gen_env.png", 
+  path = output_path,
+  width = 10,     
+  height = 7
+)
+
+
+print(stats_rhoG$mean)
+print(stats_rhoG$sd)
+print(stats_rhoE$mean)
+print(stats_rhoE$sd)
+
 ```
 
-Higher genetic correlations than environmental counterpart.
+CXCL9 more geneticaly correlated than environmental counterpart though both significant. Heterogeneity of immune cell influence. MEAN and SD purely for trend, no biological context. Effect size are significantly higher in genetic than environmental . They are all from CD8 T cell lineage.
 
 ## 9. Genetic -\> Environmental
 
@@ -522,7 +581,7 @@ gen_env_matrix <- conv_matrix (gen_env_0.1, "rhoE")
 
 gen_env_heatmap<-pheatmap(
             gen_env_matrix,
-            color = viridis(100),
+             color = colorRampPalette(c("#440154FF", "#e8e8e8", "#21908CFF"))(100),
             cluster_rows = FALSE, #As small, set to false
             cluster_cols = FALSE,
             fontsize_row = 6,
@@ -565,7 +624,7 @@ env_gen_matrix <- conv_matrix(env_gen, "rhoE")
 
 env_gen_heatmap<-pheatmap(
             env_gen_matrix,
-            color = viridis(100),
+             color = colorRampPalette(c("#440154FF", "#e8e8e8", "#21908CFF"))(100),
             cluster_rows = FALSE, #As small, set to false
             cluster_cols = FALSE,
             fontsize_row = 6,

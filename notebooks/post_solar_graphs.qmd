@@ -16,18 +16,24 @@ From the SOLAR analysis significant genetic results, we want to obtain IP-IP and
 ```{r, message=FALSE}
 library(tidyr)
 library(dplyr)
-library(pheatmap) #static
-
 library(tibble)
+
+#Graphs
 library(viridis) #Colour blind friendly palette
 library(ggplot2)
+
+#Heatmap 
+library(pheatmap) #static
+library(ComplexHeatmap)
+
 
 #Network graphs
 library(igraph)
 library(ggraph)
 library(tidygraph)
-
 library(tidyverse)
+
+library(circlize)
 ```
 
 ## 1.2 Data Loading
@@ -37,7 +43,6 @@ library(tidyverse)
 load("~/Twins_Project/scripts/solar_analysis/solar_analysis_filtering_results.RData")
 
 #Loading in the dataset for .lineage information 
-#sup.lineage 
 load("~/Twins_Project/data/raw_olink_ip/results/Olink_associations.RData")
 ```
 
@@ -92,7 +97,7 @@ IP_protein_mat <- g01_long %>%
   column_to_rownames("IP") %>%
   as.matrix()
 
-# number of non-NA proteins per IP
+#number of non-NA proteins per IP
 n_proteins_per_IP <- rowSums(!is.na(IP_protein_mat))
 
 #Filter IPs that have 2+ protein associations, the rest are unique to one protein
@@ -101,7 +106,78 @@ min_proteins <- 2
 keep_IPs <- names(n_proteins_per_IP)[n_proteins_per_IP >= min_proteins]
 
 IP_protein_mat_filt <- IP_protein_mat[keep_IPs,]
+
 ```
+
+## 2. Network Graph Genetic_0.1_hits
+
+```{r}
+#Building the edges and nodes from the genetic protein hits
+gen_edges <- genetic_0.1_hits %>%
+  filter(abs(rhoG) > 0.5) %>%  #filtered 0.5 for visuals
+  mutate(weight = abs(rhoG)) %>% #abs value strength
+  select(from = trait1, to = trait2, weight, rhoG)
+
+#Matrix to proteins as nodes and correlations as edges
+g_gen_s <- graph_from_data_frame(gen_edges, directed = FALSE)
+
+#Clustering Louvain used to find modules
+cl_gen_s <- cluster_louvain(g_gen_s, weights = E(g_gen_s)$weight)
+
+#Building the graph 
+#Tidygraph
+tg_gen <- tbl_graph(
+  nodes = data.frame(
+    name = V(g_gen_s)$name, 
+    module = membership(cl_gen_s)  #from the clustering results
+  ),
+  edges = gen_edges %>%          
+    rename(weight = weight),       
+  directed = FALSE
+)%>%
+  activate(nodes) %>% #for proteins not the edges
+  mutate(Centrality = centrality_degree()) #Proteins correlated with lots more other proteins -> number of edges connected to each node
+#allows to idnetify 'hub' proteins with lots of connections and 'specialist' proteins connected to another or few
+
+
+#Set colours
+n_mods <- length(unique(V(tg_gen)$module))
+viridis_colours <- viridis(n_mods)
+
+#Plotting with ggraph as better visually
+#fr fruchterman-reingold -> related proteins closer together
+ggraph(tg_gen, layout = "fr") +
+  #Nodes and edges
+  geom_edge_link(aes(width = weight, edge_colour = rhoG),alpha = 0.8) +
+  geom_node_point(aes(color = as.factor(module), size = Centrality), alpha = 1)+
+  #Colour
+scale_edge_colour_gradient(low = "black", high = "grey80") +
+  scale_color_manual(values = viridis_colours, name = "Module")+
+  geom_node_text(aes(label = name), repel = TRUE, size = 2.5, 
+                 max.overlaps = 12) +
+  #Aesthetics, layouts
+  theme_void() +
+  theme(
+   plot.background = element_rect(fill = "white", color = NA),
+   panel.background = element_rect(fill = "white", color = NA),
+   plot.title = element_text(hjust = 0.5,face = "bold", size = 14),
+   plot.subtitle = element_text(hjust = 0.5, size = 11),
+   #space for legend
+   plot.margin = margin(t = 10, r = 10, b = 10, l = 10, unit = "pt"),
+   legend.position = "right",
+   legend.box = "vertical",
+   legend.text = element_text(size = 6),
+   legend.title = element_text(size = 8, face = "bold"))+
+  labs(title = "IP-Protein Genetic Correlation Network",
+       subtitle = "Based on SOLAR analysis results (H2r > 0.1)",
+       edge_color = "rhoG",
+       color = "Module") +
+  guides(edge_width = "none")
+```
+
+Maybe try grouping based on lineage sub.lineages
+
+Other diagrams: circular chord diagram
 
 # 3. IP-IP Genetic Associations
 
@@ -242,7 +318,7 @@ But jaccard index measures overlap not absolute strength
 
 Those that share more proteins than those that only share one matter more for jaccard score.
 
-Thus, weighting and filtering are applied to quantify similarity with more nuance.
+Thus, weighting and filtering are applied to quantify similarity with more nuance. Weighting so IP pairs with overall more proteins shared and in common are favoured then IP pairs with overall less proteins shared though in common.
 
 ```{r}
 weight_ip_jaccard <- ip_jaccard %>%
@@ -257,100 +333,211 @@ From the Jaccard similarity results, if they have the same cell lineage then it 
 
 If they derive from different lineages then there is a possibility that this is an instigator as they come from different pathways/parts of the immune system.
 
+#### 3.2.3.1 Filtering by lineage relationships
+
 ```{r}
-#Need to select Ip and Sup.Lineage 
+#Need to select Ip and Sub.Lineage 
 lineage_ip <- genetic_0.1_hits %>%
-  select(IP=trait1, Sup.Lineage) %>%
+  select(IP=trait1, Sup.Lineage, Sub.Lineage) %>%
   distinct()
 
 #joining the lineage 
 ip_lineage_check <- weight_ip_jaccard %>%
   left_join(lineage_ip, by = c("IP_A" = "IP")) %>%
-  rename(Lineage_A = Sup.Lineage) %>%
+  rename(Sup_A = Sup.Lineage, Sub_A = Sub.Lineage) %>%
   
   left_join(lineage_ip, by = c("IP_B" = "IP")) %>%
-  rename(Lineage_B = Sup.Lineage) %>%
+  rename(Sup_B = Sup.Lineage, Sub_B = Sub.Lineage) %>%
   
-  mutate(Relationship = if_else(Lineage_A == Lineage_B, "Intra-Lineage", "Cross-Lineage")) %>%
+  mutate(Relationship = if_else(Sub_A == Sub_B, "Intra-Lineage", "Cross-Lineage")) %>%
   filter(shared_count > 1) %>% #Applying filtering 
   arrange(desc(weighted))
 
 head(ip_lineage_check, 20)
 ```
 
-All of the IPs that have high scores are of the same lineage (intra-lineage). This is natural as strongest genetic signals are from the same family tree.
+All of the IPs that have high scores are of the same lineage (intra-lineage). This is natural as strongest genetic signals are from the same family tree. Lineage driven, structured by immune lineage.
+
+High Jaccard + High weight (9 proteins shared -\> hub of IPs). Maybe multiple pathways triggered.
+
+```{r}
+#How many unqiue lineages in cross and intra
+cat("Unique Sub.Lineages\n")
+ip_lineage_check %>%
+  select(Sub_A, Sub_B) %>%
+  unlist() %>%
+  unique() %>%
+  sort() %>%
+  print()
+
+cat("\nUnique Sub.Lineages Intra-Lineages\n")
+ip_lineage_check %>%
+  filter(Relationship == "Intra-Lineage") %>%
+  select(Sub_A) %>% # Since A and B are the same in Intra, we only need one
+  distinct() %>%
+  pull(Sub_A) %>%
+  sort() %>%
+  print()
+
+cat("\nUnique Sub.Lineages Cross-Lineages\n")
+ip_lineage_check %>%
+  filter(Relationship == "Cross-Lineage") %>%
+  select(Sub_A, Sub_B) %>%
+  unlist() %>%
+  unique() %>%
+  sort() %>%
+  print()
+```
 
 **NOTE: Could investigate specific sub.lineage instead or the broader sup.lineage**
+
+#### 3.2.3.2 CROSS Lineage
 
 Finding the top cross-lineage IPs
 
 ```{r}
-top_cross_lineage <- ip_lineage_check %>%
+cross_lineage <- ip_lineage_check %>%
   filter(Relationship == "Cross-Lineage") %>%
   filter(shared_count > 1) %>% 
   arrange(desc(weighted))
 
-head(top_cross_lineage, 20)
+head(cross_lineage, 20)
 ```
 
-## 3.3 Graphing 
+There are a few cross lineage. Top cross have weighted scores of 3.2 which is low (shared proteins 4 out of 5) though these are both T cells
 
-### 3.3.1 Network Graph 
+Regardless of weight, checking jaccard score 1.0. These have 3 proteins shared with cross lineages of B cells and T cells. These have high jaccard + low weight -\> specific links, maybe only one pathway triggered.
 
-Graphing overall network
+Specific sub.lineages has highest connection to others? How many sub connects to sub
 
-Graphing inter lineage hits
+## 3.3 Graphing
 
-Graphing cross lineage hits
+I need to graph (1) intra vs cross lineage realationships (2) Top : shared proteins count, total protein in x and y (3) Jaccard weighted scores?
+
+### 
+
+Focus on cross lineage bridges.
+
+OVERALL GOAL: These top IP-IP pairs, need to compare with which proteins are they sharing
+
+### 3.3. Lineage 
+
+Sankey diagram for sup -\> sub -\> top shared
+
+or
+
+lineage a -\> PROTEIN SHARED -\> lineage B?
+
+### 3.3. Cross lineage chord diagram based 
 
 ```{r}
+#Using circlize
+#Aggregating the data
+chord_df <- ip_lineage_check %>%
+  group_by(Sub_A, Sub_B, Sup_A, Sup_B, Relationship) %>%
+  summarise(value = sum(weighted), .groups = "drop") #can filter for stronger signals with  filter(value > quantile(value, 0.8)) 
 
+#Relationship 
+chord_df <- chord_df %>%
+  mutate(link_col = if_else(Relationship == "Intra-Lineage", 
+                            "#440154FF",  
+                            "#21908CFF")) 
+#Clearing 
+circos.clear()
+
+nodes <- chord_df %>%
+  select(Sub = Sub_A, Sup = Sup_A) %>%
+  bind_rows(chord_df %>% select(Sub = Sub_B, Sup = Sup_B)) %>%
+  distinct() %>%
+  arrange(Sup, Sub)
+
+#PLOT
+circos.clear()
+circos.par(gap.after = 2, start.degree = 90)
+
+chordDiagram(
+  x = chord_df %>% select(Sub_A, Sub_B, value),
+  order = nodes$Sub,
+  col = chord_df$link_col,          
+  transparency = 0.3,     #Overlapping
+  annotationTrack = "grid", 
+  preAllocateTracks = list(track.height = 0.1)
+)
+
+#Lables
+circos.track(track.index = 1, 
+             panel.fun = function(x, y) {
+  circos.text(CELL_META$xcenter,
+              CELL_META$ylim[1],
+              CELL_META$sector.index, 
+              facing = "clockwise", 
+              niceFacing = TRUE, 
+              adj = c(0, 0.5), 
+              cex = 0.6)
+},
+bg.border = NA)
+
+#Legend
+legend("bottomleft", title = "Weighted Jaccard Score", 
+       legend = c("Low", "High"), 
+       fill = c("#440154FF","#21908CFF"), bty = "n")
+
+circos.clear()
 ```
 
-# 4. Protein-Protein Genetic Associations
-
-This is based on sharing IPS, not from a separate solar analysis.
-
-## 4.1 Pearson's Correlation
+## jaccard score
 
 ```{r}
-protein_protein_cor <- cor(IP_protein_mat_filt ,
-                           use = "pairwise.complete.obs",
-                           method = "pearson")
-dim(protein_protein_cor)
+#Using circlize
+#Aggregating the data
+chord_df <- ja %>%
+  group_by(Sub_A, Sub_B, Sup_A, Sup_B, Relationship) %>%
+  summarise(value = sum(weighted), .groups = "drop") #can filter for stronger signals with  filter(value > quantile(value, 0.8)) 
 
-```
+#Relationship 
+chord_df <- chord_df %>%
+  mutate(link_col = if_else(Relationship == "Intra-Lineage", 
+                            "#440154FF",  
+                            "#21908CFF")) 
+#Clearing 
+circos.clear()
 
-Graphing
+nodes <- chord_df %>%
+  select(Sub = Sub_A, Sup = Sup_A) %>%
+  bind_rows(chord_df %>% select(Sub = Sub_B, Sup = Sup_B)) %>%
+  distinct() %>%
+  arrange(Sup, Sub)
 
-```{r}
-protein_edges <- protein_protein_cor %>%
-  as.data.frame() %>%
-  rownames_to_column("protein1") %>%
-  pivot_longer(-protein1, names_to = "protein2", values_to = "cor") %>%
-  filter(protein1 < protein2,  cor > 0.25, !is.na(cor))
+#PLOT
+circos.clear()
+circos.par(gap.after = 2, start.degree = 90)
 
-g_prot <- graph_from_data_frame(protein_edges, directed = FALSE)
+chordDiagram(
+  x = chord_df %>% select(Sub_A, Sub_B, value),
+  order = nodes$Sub,
+  col = chord_df$link_col,          
+  transparency = 0.3,     #Overlapping
+  annotationTrack = "grid", 
+  preAllocateTracks = list(track.height = 0.1)
+)
 
-#Modules
-cl_prot <- cluster_louvain(g_prot, weights = protein_edges$cor)
+#Lables
+circos.track(track.index = 1, 
+             panel.fun = function(x, y) {
+  circos.text(CELL_META$xcenter,
+              CELL_META$ylim[1],
+              CELL_META$sector.index, 
+              facing = "clockwise", 
+              niceFacing = TRUE, 
+              adj = c(0, 0.5), 
+              cex = 0.6)
+},
+bg.border = NA)
 
-#Tidygraph
-tg_prot <- tbl_graph(
-  nodes = data.frame(
-    name=V(g_prot)$name, 
-    module=membership(cl_prot)),
-  edges = protein_edges %>% rename(weight = cor), 
-  directed=FALSE)%>%
-  mutate(importance = centrality_degree())
+#Legend
+legend("bottomleft", title = "Weighted Jaccard Score", 
+       legend = c("Low", "High"), 
+       fill = c("#440154FF","#21908CFF"), bty = "n")
 
-#Plotting with ggraph
-ggraph(tg_prot, layout="fr") +
- geom_edge_link(aes(width=log(weight + 1)), color = "grey80", alpha=0.5) +
-  geom_node_point(aes(color=factor(module), size = importance), alpha = 0.8) +
-  scale_color_viridis_d(option = "viridis") + 
-  scale_size_continuous(range = c(2, 7)) +
-  geom_node_text(aes(label=name), repel=TRUE, size=2) +
-  theme_void() +
-  labs(title="Protein Genetic Similarity Modules")
+circos.clear()
 ```
