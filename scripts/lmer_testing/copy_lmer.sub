@@ -1,0 +1,30 @@
+#!/bin/bash
+#SBATCH --job-name=lmer_IPs
+#SBATCH -o /users/k25046756/Twins_Project/logs/lmer_testing/sbatch_out/lmer_olink.%x.%j.stdout
+#SBATCH -e /users/k25046756/Twins_Project/logs/lmer_testing/sbatch_out/lmer_olink.%x.%j.stderr
+#SBATCH --mem=8G
+#SBATCH --time=0-12:00
+#SBATCH --array 1-1
+
+
+#-----------
+#   RUN
+#-----------
+# Clear the environment from any previously loaded modules
+module purge > /dev/null 2>&1
+
+# Load R
+module load r/4.3.0-gcc-13.2.0-withx-rmath-standalone-python-3.11.6
+
+# Set working directory
+WDIR="/users/k25046756/Twins_Project/data/lmer_testing"
+
+mkdir -p $WDIR/associations_test
+
+protein=$1
+R --slave --vanilla --file=$WDIR/copy_lmer.R --args "$protein"
+
+
+# submit with
+#cat /users/k25046756/Twins_Project/data/lmer_testing/olink.test.list | while read -r protein; do
+#sbatch -p cpu /users/k25046756/Twins_Project/scripts/lmer_testing/copy_lmer.sub "$protein" ; done
