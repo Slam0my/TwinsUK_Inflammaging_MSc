@@ -12,6 +12,7 @@ solar_chunks/
 .Rproj.user/
 *.Rproj
 .Ruserdata
+.DS_Store
 
 # --- Enable scripts ---
 !scripts/**/*.R
