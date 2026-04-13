@@ -7,7 +7,7 @@ results/
 solar_chunks/
 
 # --- Ignore R/Project Artifacts ---
-.RData
+*.RData
 .Rhistory
 .Rproj.user/
 *.Rproj
