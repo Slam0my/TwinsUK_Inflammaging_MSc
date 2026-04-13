@@ -2,7 +2,6 @@
 data/
 logs/
 software/
-lmer_testing/
 raw_olink_ip/
 results/
 solar_chunks/
