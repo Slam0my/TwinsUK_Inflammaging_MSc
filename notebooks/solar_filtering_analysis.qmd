@@ -2,7 +2,6 @@
 title: "solar_analysis_filtering"
 format: html
 editor: visual
----a
 ---
 
 # SOLAR Results Analysis
@@ -19,9 +18,15 @@ library(dplyr)
 library(tidyr)
 library(tibble)
 
+#Plotting
 library(viridis) #Colour blind friendly palette
 library(ggplot2) #Graphing
-library(pheatmap) #Heatmap
+library(ggrepel) #Volcano
+library(patchwork) #Combine Plots
+
+#Heatmap
+library(ComplexHeatmap)
+library(circlize)
 ```
 
 ### 1.2 Loading Data
@@ -154,7 +159,9 @@ Saving to be loaded elsewhere.
 save.image(file = "solar_analysis_filtering_results.RData")
 ```
 
-## 3. Exploration of the filtered results
+## 3. Exploration of the overall IP-Protein Results (non-filtered)
+
+sum_results_combined exploration. This is the general counts and distribution.
 
 ### 3.1 Protein Distribution
 
@@ -163,14 +170,21 @@ Analysing how many proteins per IPs are present in each filtering.
 #### 3.1.1 Overall Protein Distribution
 
 ```{r}
-ip_per_protein <- sum_results_combined %>%
-  filter(rhoG_FDR < 0.05) %>%  # Significant only
-  count(trait2, sort = TRUE, name = "n_IPs")
-
-print(ip_per_protein)
+sum_results_combined %>%
+  summarise(
+    total_rows = n(),
+    unique_IPs = n_distinct(trait1),
+    unique_proteins = n_distinct(trait2)
+  )
 ```
 
-#### 3.1.2 Graph for frequency distribution
+#### 3.1.2 IP to Protein Frequency Distribution
+
+```{r}
+ip_per_protein <- sum_results_combined %>%
+  count(trait2, sort = TRUE, name = "n_IPs")
+print(ip_per_protein)
+```
 
 ```{r}
 ip_per_protein %>%
@@ -178,9 +192,9 @@ ip_per_protein %>%
   geom_col(aes(fill = n_IPs), alpha = 0.8, color = "white", linewidth = 0.3) +
   #Log for better visualisation
  scale_y_continuous(trans = "pseudo_log", 
-                   breaks = c(1, 10, 100, 1000)) +
+                   breaks = c(1, 10, 100, 1000, 2000,4000)) +
   #Numerical values next to bar
-  geom_text(aes(label = n_IPs), hjust = -0.2, size =1.5, color = "black")+
+  geom_text(aes(label = n_IPs), hjust = -0.2, size =1.5, color = "black", fontface = "bold")+
   #Colour scheme
   scale_fill_viridis_c(option = "viridis")+
   #Axis
@@ -212,45 +226,79 @@ In the 0.1 and 0.3 top hits, find what proteins are most frequent/popular for ge
 
 45 proteins
 
-### 3.2 Genetic h2r 0.1 filtered hits
+#### 3.1.3 Top 15 Proteins
+
+Better Visualisation
 
 ```{r}
-#Count protein frequency in genetic_0.1_hits
-protein_frequency_0.1 <- genetic_0.1_hits %>%
-  group_by(trait2) %>% #trait2 is the protein column
-  summarise(count = n()) %>%
-  arrange(desc(count))
+ip_per_protein %>%
+  slice_max(n_IPs, n = 15, with_ties = FALSE) %>%
+  ggplot(aes(x = reorder(trait2, n_IPs), y = n_IPs)) +
+  geom_col(aes(fill = n_IPs), alpha = 0.8, color = "white", linewidth = 0.3) +
 
-#Looking at the top 10
-print(head(protein_frequency_0.1, 10))
+  #Numerical values next to bar
+  geom_text(aes(label = n_IPs), hjust = -0.2, size =3, color = "black", fontface = "bold")+
+  #Colour scheme
+  scale_fill_viridis_c(option = "viridis")+
+  #Axis
+  coord_flip() +
+  scale_y_continuous(
+    limits = c(0, 3800),               
+    breaks = seq(0, 4000, by = 500),
+    expand = expansion(mult = c(0, 0.1)))+
+  #Labelling
+  labs(title = "Top 15 Protein by IP Distribution ",
+       x = "Protein", y = "Number of IPs ") +
+  theme_minimal() +
+  theme(
+    axis.text.y = element_text(size = 10),     
+    axis.title.y = element_text(size = 12,face = "bold"),
+    axis.text.x = element_text(size = 10),
+    axis.title.x = element_text(size = 12,face = "bold"),
+    plot.title = element_text(size = 14, face = "bold",hjust = 0.5, margin = margin(b = 10)),
+    legend.position = "none",
+    axis.line = element_line(color = "black"),
+    panel.grid.major.y = element_blank() #No vertical lines
+  )
+
+#Saving plot
+ggsave(
+  filename = "Top_15_Protein_Distribution.png", 
+  path = output_path,
+  width = 10,     
+  height = 8
+)
 ```
 
-### 3.3 Genetic h2r 0.3 filtered hits
+### 3.2 IP sharing count
+
+#### 3.2.1 Distribution
 
 ```{r}
-#Count protein frequency in genetic_0.3_hits
-protein_frequency_0.3 <- genetic_0.3_hits %>%
-  group_by(trait2) %>% 
-  summarise(count = n()) %>%
-  arrange(desc(count))
+protein_per_ip <- sum_results_combined %>%
+  count(trait1, sort = TRUE, name = "n_Proteins")
 
-print(head(protein_frequency_0.3, 10))
+print(protein_per_ip )
 ```
 
-### 3.4 Environmentally filtered hits
+#### 3.2.2 Lineage Investigation
 
 ```{r}
-# Count how many times each protein appears in your genetic hits
-protein_frequency_env <- environmental_hits %>%
-  group_by(trait2) %>% # assuming trait2 is your protein
-  summarise(count = n()) %>%
-  arrange(desc(count))
+lineage_summary <- sum_results_combined %>%
+  group_by(Lineage, Sup.Lineage, Sub.Lineage) %>%
+  summarise(
+    n_unique_IPs = n_distinct(trait1),
+    n_unique_Proteins = n_distinct(trait2),
+    n_Pairs = n() 
+  ) %>%
+  arrange(desc(n_Pairs))
 
-# Look at the top 10
-print(head(protein_frequency_env, 10))
+print(lineage_summary)
 ```
 
-## 4. IP-Protein Summary Statistics
+27 unique lineages across pairs.
+
+## 4. IP-Protein Post-Filtering Summary Statistics
 
 Show the distribution of those genetically, environmentally and both significant.
 
@@ -263,42 +311,49 @@ Visualising the distribution of genetic and environmental correlations.
 #For purpose of graphing, we redefine the labels
 summary_results_fdr_points <- sum_results_combined %>%
  mutate(Sig_Type = case_when(
-  rhoG_FDR < 0.05 & rhoE_FDR >= 0.05 ~ "Genetic (rhoG)",
-  rhoG_FDR >= 0.05 & rhoE_FDR < 0.05 ~ "Environmental (rhoE)",
+  rhoG_FDR < 0.05 & rhoE_FDR >= 0.05 ~ "Genetic (ρG)",
+  rhoG_FDR >= 0.05 & rhoE_FDR < 0.05 ~ "Environmental (ρE)",
   rhoG_FDR < 0.05 & rhoE_FDR < 0.05 ~ "Both ",
   TRUE ~ "Non-Significant"
  ))
 
 #Plotting a graph to show the rhoG and rhoE distribution of all IP -Protein associations
-ggplot(summary_results_fdr_points, aes(x = rhoG, y = rhoE, color = Sig_Type)) +
- #Adding each pair as a point
- geom_point(alpha = 0.6, size = 1) +
- #Adding a cross
- geom_vline(xintercept = 0, linetype = "dashed", color = "grey50") +
- geom_hline(yintercept = 0, linetype = "dashed", color = "grey50") +
- #Colour scale
- scale_color_viridis_d(option = "viridis") +
- theme_minimal() +
- #Lablelling
- theme(
-   plot.title = element_text(hjust = 0.5,face = "bold", size = 14),
-   plot.subtitle = element_text(hjust = 0.5, size = 11),
-   legend.position = "right",
-   legend.text = element_text(size = 12),
-   legend.title = element_text(size = 14, face = "bold"),
-   legend.key.size = unit(1, "cm"),
-   legend.key.width = unit(1, "cm")) +
- labs(
-  title = "IP-Protein Association Correlation Landscape",
-  subtitle = "Based on FDR-adjusted significance",
-  x = "Genetic Correlation (rhoG)",
-  y = "Environmental Correlation (rhoE)",
-  color = "Correlation Significance"
- )
+rho_dis_overall<- ggplot(summary_results_fdr_points, aes(x = rhoG, y = rhoE, color = Sig_Type)) +
+   #Adding each pair as a point
+   geom_point(alpha = 0.6, size = 1) +
+   #Adding a cross
+   geom_vline(xintercept = 0, linetype = "dashed", color = "grey50") +
+   geom_hline(yintercept = 0, linetype = "dashed", color = "grey50") +
+   #Colour scale
+   scale_color_manual(values = c(
+  "Both "           = "#440154FF", 
+  "Genetic (ρG)"    = "#21908CFF", 
+  "Environmental (ρE)" = "#FDE725FF", 
+  "Non-Significant"  = "grey80"      
+))
+   theme_minimal() +
+   #Lablelling
+   theme(
+    # plot.title = element_text(hjust = 0.5,face = "bold", size = 14),
+     legend.position = "none",
+     plot.subtitle = element_text(hjust = 0.5, face = "bold",size = 14))+
+    # legend.position = "right",
+     #legend.text = element_text(size = 12),
+   #  legend.title = element_text(size = 14, face = "bold"),
+    # legend.key.size = unit(1, "cm"),
+     #legend.key.width = unit(1, "cm")) +
+   labs(
+   # title = "Overall Correlation Landscape",
+   subtitle = "Overall Correlation Landscape",
+    x = "Genetic Correlation (ρG)",
+    y = "Environmental Correlation (ρE)",
+    color = "Correlation Significance"
+   )
 
 #Saving plot
 ggsave(
   filename = "Overall_Correlation_dotplot.png", 
+  plot = rho_dis_overall,
   path = output_path,
   width = 12,     
   height = 8
@@ -310,52 +365,167 @@ ggsave(
 Graphing the indivdiual distribution of each lineage
 
 ```{r}
-ggplot(summary_results_fdr_points, aes(x = rhoG, y = rhoE, color = Sig_Type)) +
-  #Adding each pair as a point
-  geom_point(alpha = 0.6, size = 1) +
-  #Adding a cross
-  geom_vline(xintercept = 0, linetype = "dashed", color = "grey50") +
-  geom_hline(yintercept = 0, linetype = "dashed", color = "grey50") +
-  
-  #Creating separate graphs for the lineages
-  facet_wrap(~Sup.Lineage, ncol = 3) + 
-  #Colour scale
-  scale_color_viridis_d(option = "viridis") +
-  
-  theme_bw() + 
-  theme(
-    plot.title = element_text(hjust = 0.5,face = "bold", size = 14),
-    plot.subtitle = element_text(hjust = 0.5, size = 11),
-    legend.position = c(0.85, 0.2), #Positioned in empty space
-    legend.text = element_text(size = 12),
-    legend.title = element_text(size = 14, face = "bold"),
-    legend.key.size = unit(1, "cm"),
-    legend.key.width = unit(1, "cm"),
-    strip.background = element_rect(fill = "white"), 
-    strip.text = element_text(face = "bold")
-  ) +
-  
-  labs(
-    title = "IP-Protein Association Correlation Landscape",
-    subtitle = "Grouped by Lineage",
-    x = "Genetic Correlation (rhoG)",
-    y = "Environmental Correlation (rhoE)",
-    color = "Correlation Signficance"
-  )
+indiv_lin_rho_dis <- ggplot(summary_results_fdr_points, aes(x = rhoG, y = rhoE, color = Sig_Type)) +
+    #Adding each pair as a point
+    geom_point(alpha = 0.6, size = 1) +
+    #Adding a cross
+    geom_vline(xintercept = 0, linetype = "dashed", color = "grey50") +
+    geom_hline(yintercept = 0, linetype = "dashed", color = "grey50") +
+    
+    #Creating separate graphs for the lineages
+    facet_wrap(~Sup.Lineage, ncol = 3) + 
+    #Colour scale
+     scale_color_manual(values = c(
+  "Both "           = "#440154FF", 
+  "Genetic (ρG)"    = "#21908CFF", 
+  "Environmental (ρE)" = "#FDE725FF", 
+  "Non-Significant"  = "grey80"   ))+
+    #For legend dots
+    guides(color = guide_legend(override.aes = list(size = 2.5))) +
+    theme_bw() + 
+    theme(
+      plot.subtitle = element_text(hjust = 0.5, face = "bold", size = 14),
+      legend.position = c(0.85, 0.2), #Positioned in empty space
+      legend.text = element_text(size = 14),
+      legend.title = element_text(size = 14, face = "bold"),
+      legend.key.size = unit(1.2, "cm"),
+      legend.key.width = unit(1, "cm"),
+      strip.background = element_rect(fill = "white"), 
+      strip.text = element_text(face = "bold")
+    ) +
+    labs(
+     # title = "By Lineage",
+      subtitle = "By Lineage",
+      x = "Genetic Correlation (ρG)",
+      y = "Environmental Correlation (ρE)",
+      color = "Correlation Signficance"
+    )
 
 
 #Saving plot
 ggsave(
   filename = "Overall_Correlation_Lineage_dotplot.png", 
+  plot = indiv_lin_rho_dis ,
   path = output_path,
   width = 12,     
   height = 8
 )
 ```
 
-NOTE: SUB.LINEAGE investigations needed
+### 4.3 Collating Both Graphs
 
-### 4.3 Summary Table
+```{r}
+#Using Patchwork
+comb_overall_rho <- (rho_dis_overall / indiv_lin_rho_dis ) + 
+  plot_annotation(
+    title = "IP-Protein Association Correlation Analysis",
+    tag_levels = 'A') &
+  theme(
+    plot.title = element_text(size = 18, face = "bold", hjust = 0.5),
+    plot.tag = element_text(size = 20, face = "bold")
+  )
+
+print(comb_overall_rho)
+
+ggsave(
+  filename = "combined_ip_prot_corr.png", 
+  plot = comb_overall_rho ,
+  path = output_path,
+  width = 12,     
+  height = 16
+)
+```
+
+### 4.3 Volcano Plot on Genetic
+
+```{r}
+volcano_data <- sum_results_combined %>%
+  mutate(
+    log_p = -log10(rhoG_p0),
+    #Showing lineage of significnat
+    sig_lineage = if_else(rhoG_FDR < 0.05, as.character(Sup.Lineage), "Not Significant")) %>%
+    mutate(sig_lineage = factor(sig_lineage, 
+                              levels = c("Not Significant", setdiff(unique(sig_lineage), "Not Significant")))) %>%
+  arrange(sig_lineage)
+
+#Aesthetics - Colours
+unique_lineage <- setdiff(unique(volcano_data$sig_lineage), "Not Significant")
+lineage_colors <- viridis::viridis(length(unique_lineage))
+names(lineage_colors) <- unique_lineage
+final_colors <- c(lineage_colors, "Not Significant" = "grey80")
+
+#Plot
+volcano_plot <- ggplot(volcano_data, aes(x = rhoG, y = log_p, color = sig_lineage)) +
+  geom_point(alpha = 0.75, size = 0.6) +
+  scale_color_manual(values = final_colors) +
+  
+  #Lines
+  geom_vline(xintercept = 0, linetype = "dashed", color = "grey40") +
+  geom_hline(yintercept = -log10(max(volcano_data$rhoG_p0[volcano_data$rhoG_FDR < 0.05], na.rm = TRUE)), 
+             linetype = "dotted", color = "red") +
+  
+  #Lables for the top 10 proteins
+  geom_text_repel(data = volcano_data %>% 
+                      filter(rhoG_FDR < 0.05) %>% 
+                      arrange(desc(log_p)) %>%
+                      distinct(trait2, .keep_all = TRUE) %>%
+                      slice_max(order_by = log_p, n = 15),
+                    aes(label = trait2), 
+                    size = 3.5,
+                    fontface = "bold", 
+                    color = "black",
+                    show.legend = FALSE) +
+  
+  theme_classic() +
+  labs(title = " Overall Genetic Correlation Landscape (ρG)",
+       subtitle = "Significant hits. Not taking into account of heritability.",
+       x = "Genetic Correlation (ρG)",
+       y = "-log10(p-value)",
+       color = "Lineage Group") +
+  theme(legend.position = "right",
+        legend.text = element_text(size = 8),
+        legend.title = element_text(size = 10, face = "bold"))
+
+print(volcano_plot)
+
+#save
+ggsave(filename =  "volcano_genetic_landscape.png",
+       path = output_path,
+       width = 10, 
+       height = 8)
+```
+
+Top genetic hits can be bidirectional? so in graph can point out the two sides? this is not filtered for genetic
+
+```{r}
+sum_results_combined %>%
+  filter(trait2 == "CXCL10") %>%
+  mutate(Direction = if_else(rhoG < 0, "Negative (-)", "Positive (+)")) %>%
+  group_by(Direction) %>%
+  tally()
+```
+
+```{r}
+genetic_0.1_hits %>%
+  filter(trait2 == "CXCL10") %>%
+  count(Direction = if_else(rhoG < 0, "Negative (-)", "Positive (+)"))
+```
+
+Interestingly for CXCL10/CXCL9 +(chemokines?) others, bidirection even filtered. But others like ADA are majority one direction dominant .
+
+```{r}
+lineage_direction <- genetic_0.1_hits %>%
+  filter(trait2 == "CXCL10") %>%
+  mutate(Direction = if_else(rhoG < 0, "Negative (-)", "Positive (+)")) %>%
+  group_by(Sup.Lineage, Direction) %>%
+  tally() %>%
+  arrange(Sup.Lineage, desc(n))
+
+print(lineage_direction)
+
+```
+
+### 4.4 Summary Table
 
 Summary table from the fdr results based on correlation types for quantification.
 
@@ -409,31 +579,18 @@ With the genetic hits filtered for h2r \> 0.1.
 
 These are genetic hits and likely instigators of inflammaging. Likely related to ageing.
 
-### 6.1 Heatmap
+### 6.1 Analysis
 
 ```{r}
-genetic_matrix <- conv_matrix(genetic_0.1_hits, "rhoG")
-
-genetic_heatmap<-pheatmap(
-            t(genetic_matrix), #transpose so x axis is IP and protein on Y 
-            color = colorRampPalette(c("#440154FF", "#e8e8e8", "#21908CFF"))(100),
-            cluster_rows = TRUE,
-            cluster_cols = TRUE,
-            fontsize_row = 6,
-            fontsize_col = 6,
-            show_rownames = TRUE,
-            show_colnames = FALSE,
-            na_colour = "black",  
-            main = "Genetic Correlations (IP vs Proteins)",
-            border_color = NA
-          )
-
-genetic_heatmap
+genetic_0.1_hits %>%
+  summarise(
+    total_rows = n(),
+    unique_IPs = n_distinct(trait1),
+    unique_proteins = n_distinct(trait2)
+  )
 ```
 
-Heatmap appears sparce visually.
-
-### 6.2 Shared Protein Distribution
+#### 6.1.1 Shared Protein Distribution
 
 ```{r}
 #Counting how many share proteins
@@ -448,6 +605,57 @@ shared_protein_ip_gen <- table(ip_gen_sharing$protein_count)
 shared_protein_ip_gen
 ```
 
+### 6.1 Heatmap
+
+```{r}
+genetic_matrix <- conv_matrix(genetic_0.1_hits, "rhoG")
+
+#Lineage
+ip_names <- colnames(t(genetic_matrix))
+
+anno_col <- genetic_0.1_hits %>%
+  select(trait1, Lineage) %>%
+  distinct() %>%
+  filter(trait1 %in% ip_names) %>%
+  column_to_rownames("trait1")
+
+lineage_split <- anno_col$Lineage
+
+col_fun = colorRamp2(c(-0.6, 0, 0.6), 
+                     c("#440154FF", "#e8e8e8", "#21908CFF"))
+
+#Graph
+genetic_heatmap<-  Heatmap(t(genetic_matrix), 
+          name = "ρG", 
+          col = col_fun,
+          column_split = lineage_split,
+          column_title_side = "bottom",
+          column_title_gp = gpar(fontsize = 8, fontface = "bold"),
+          column_title_rot = 90,
+          cluster_rows = TRUE,
+          cluster_columns = TRUE,
+          show_column_dend = FALSE,
+          show_column_names = FALSE,
+          show_row_names = TRUE,
+          row_names_gp = gpar(fontsize = 8),
+          na_col = "grey90",
+          border = FALSE
+            )
+
+ #Saving 
+#png(filename = file.path(output_path, "gen_heat.png"), 
+ #   width = 16, 
+  #  height = 8, 
+   # units = "in", 
+    #res = 300)
+
+draw(genetic_heatmap, column_title = "Genetic Architecture of IP-Protein Pairs")
+
+#dev.off()
+```
+
+### 
+
 ## 7. Environmental Hits Analysis
 
 Environmental markers - reactive in response externally. Likely not realted to ageing.
@@ -459,20 +667,37 @@ Environmental markers - reactive in response externally. Likely not realted to a
 ```{r}
 environmental_matrix <- conv_matrix (environmental_hits, "rhoE")
 
-env_heatmap<-pheatmap(
-            environmental_matrix,
-            color = colorRampPalette(c("#440154FF", "#e8e8e8", "#21908CFF"))(100),
-            cluster_rows = TRUE,
-            cluster_cols = TRUE,
-            fontsize_row = 6,
-            fontsize_col = 6,
-            show_rownames = FALSE,
-            show_colnames = TRUE,
-            na_colour = "black",  
-            main = "Environmental Correlations (IP vs Proteins)",
-            border_color = NA
-          )
-env_heatmap
+ip_names_env <- colnames(t(environmental_matrix))
+
+anno_env <- environmental_hits %>%
+  select(trait1, Lineage) %>%
+  distinct() %>%
+  filter(trait1 %in% ip_names_env) %>%
+  column_to_rownames("trait1")
+
+lineage_env <- anno_env$Lineage
+
+col_env = colorRamp2(c(-0.6, 0, 0.6), 
+                         c("#440154FF", "#e8e8e8", "#21908CFF"))
+
+env_heatmap <- Heatmap(t(environmental_matrix), 
+          name = "ρE", 
+          col = col_env,
+          column_split = lineage_env,
+          column_title_side = "bottom",
+          column_title_gp = gpar(fontsize = 8, fontface = "bold"),
+          column_title_rot = 90,
+          cluster_rows = TRUE,
+          cluster_columns = TRUE,
+          show_column_dend = FALSE,
+          show_column_names = FALSE,
+          show_row_names = TRUE,
+          row_names_gp = gpar(fontsize = 8),
+          na_col = "grey90",
+          border = FALSE)
+
+draw(env_heatmap, column_title = "Environmental Architecture of IP-Protein Pairs")
+
 ```
 
 ### 7.2 Shared Protein Distribution
@@ -526,29 +751,31 @@ ggplot(both_dual, aes(x = reorder(IP, abs(rhoG)))) +
   geom_hline(yintercept = stats_rhoE$mean, color = "#21908CFF", linetype = "solid", alpha = 0.4) +
   #label for mean +sd
   annotate("text", x = 1, y = stats_rhoG$mean, label = "MEAN", 
-           angle = 90, size = 2.5, color = "#440154FF", vjust = -1, hjust = -0.2) +
-  annotate("text", x = 1, y = stats_rhoG$max+0.02, label = "STDEV", 
-           angle = 90, size = 2.5, color = "#440154FF", vjust = -1, hjust = -0.2) +
+           angle = 90, size = 3, color = "#440154FF", vjust = -1, hjust = -0.2,fontface = "bold") +
+  annotate("text", x = 1, y = stats_rhoG$max+0.01, label = "STDEV", 
+           angle = 90, size = 3, color = "#440154FF", vjust = -1, hjust = -0.2,fontface = "bold") +
            
   
   geom_segment(aes(xend = IP, y = rhoG, yend = rhoE), color = "grey85", size = 1) +
   geom_point(aes(y = rhoG, color = "Genetic (ρG)"), size = 5) +
   geom_point(aes(y = rhoE, color = "Environmental (ρE)"), size = 5) +
-  scale_y_continuous(expand = c(0, 0), limits = c(0, 0.6)) + #x axis
+  scale_y_continuous(expand = c(0, 0), limits = c(0.2, 0.55)) + #x axis
   coord_flip() +
   scale_color_manual(values = c("#21908CFF","#440154FF"))+
   labs(
-    title = "Both Genetic + Environmental Correlations",
-    subtitle = "Only CXCL9 had IPs significant in both genetic and environmental correlations.",
-    x = "Immunophenotype", y = "Correlation Coefficient with CXCL9",
+    title = "Both Genetic and Environmental Correlations",
+    x = "IP", y = "Correlation Coefficient (ρ) with CXCL9",
     color = "Correlation Type"
   ) +
   theme_minimal() +
     theme(
-    legend.position = "right",
-    plot.title = element_text(face = "bold", hjust = 0.5),
+    legend.position = "bottom",
+    legend.title = element_text(size = 11, face = "bold"),
+    legend.text = element_text(size = 11),
+    plot.title = element_text(face = "bold", hjust = 0.5,margin = margin(b = 20)),
     axis.title = element_text(size = 11, face = "bold"),
-    axis.text = element_text(size = 10),
+    axis.text.x = element_text(size = 11),
+    axis.text.y = element_text(size = 9),
     axis.line = element_line(color = "black"))
 
 
@@ -557,7 +784,7 @@ ggsave(
   filename = "dumbell_both_gen_env.png", 
   path = output_path,
   width = 10,     
-  height = 7
+  height = 8
 )
 
 
@@ -579,20 +806,39 @@ Those that are genetically correlated but also have environmental correlations
 ```{r}
 gen_env_matrix <- conv_matrix (gen_env_0.1, "rhoE")
 
-gen_env_heatmap<-pheatmap(
-            gen_env_matrix,
-             color = colorRampPalette(c("#440154FF", "#e8e8e8", "#21908CFF"))(100),
-            cluster_rows = FALSE, #As small, set to false
-            cluster_cols = FALSE,
-            fontsize_row = 6,
-            fontsize_col = 6,
-            show_rownames = FALSE,
-            show_colnames = TRUE,
-            na_colour = "black",  
-            main = "Both Genetic and Environmental Correlations (IP vs Proteins)",
-            border_color = NA
+ip_names_gen_env <- colnames(t(gen_env_matrix))
+
+anno_gen_env<- gen_env_0.1 %>%
+  select(trait1, Lineage) %>%
+  distinct() %>%
+  filter(trait1 %in% ip_names_gen_env) %>%
+  column_to_rownames("trait1")
+
+lineage_gen_env <- anno_gen_env$Lineage
+
+col_gen_env = colorRamp2(c(-0.6, 0, 0.6), 
+                          c("#440154FF", "#e8e8e8", "#21908CFF"))
+
+
+gen_env_heatmap<-Heatmap(t(gen_env_matrix),
+          name = "rhoE",
+          col = col_gen_env,
+          column_split = lineage_gen_env,
+          column_title_side = "bottom",
+          column_title_gp = gpar(fontsize = 8, fontface = "bold"),
+          column_title_rot = 90,
+          cluster_rows = FALSE, 
+          cluster_columns = FALSE,
+          show_column_dend = FALSE,
+          show_column_names = FALSE,
+          show_row_names = TRUE,
+          row_names_gp = gpar(fontsize = 8),
+          na_col = "grey90",
+          border = FALSE
           )
-gen_env_heatmap
+
+draw(gen_env_heatmap, 
+     column_title = "Genetically with Environmental IP-Protein Correlations ")
 ```
 
 ### 9.2 Graph Plot
@@ -615,6 +861,70 @@ ggplot(gen_env_0.1, aes(x = rhoG, y = rhoE, color = trait2)) +
   )
 ```
 
+### 9.3 Dumbbell
+
+```{r}
+
+
+#Need df with lineag e
+gen_env_plot_data <- gen_env_0.1 %>%
+  arrange(Sup.Lineage, rhoG) %>%
+  mutate(Plot_Label = factor(trait1, levels = unique(trait1)))
+
+#Plot
+ggplot(gen_env_plot_data) +
+  geom_tile(aes(y = Plot_Label, x = -0.6, fill = Sup.Lineage), 
+            width = 0.05, height = 1) +
+  #connection line
+  geom_segment(aes(y = Plot_Label, yend = Plot_Label, 
+                   x = rhoG, xend = rhoE), 
+               color = "grey80", size = 0.8) +
+  #Points
+  geom_point(aes(y = Plot_Label, x = rhoG, color = "Genetic (rhoG)"), size = 2.5) +
+  geom_point(aes(y = Plot_Label, x = rhoE, color = "Environmental (rhoE)"), size = 2.5) +
+  
+  #Separate the proteins by graph
+  facet_grid(trait2 ~ ., scales = "free_y", space = "free_y") +
+  #0 line
+  geom_vline(xintercept = 0, linetype = "dashed", color = "grey40") +
+  #Aesthetics
+  scale_color_manual(values = c("Genetic (rhoG)" = "#440154FF", 
+                                "Environmental (rhoE)" = "#21908CFF")) +
+  scale_fill_manual(values = c("B cells" = "#47c16eFF", 
+                               "monocytes" = "#8FD744FF", 
+                               "T cells" = "#FDE725FF")) +
+  theme_minimal() +
+  labs(
+    title = "Genetically Correlated Environmental Hits",
+    subtitle = "Connected dots represent the same IP-Protein pair",
+    x = "Correlation Coefficient (ρ)",
+    y = "IP",
+    color = "Correlation Type"
+  ) +
+
+
+  theme(
+    strip.text.y = element_text(angle = 0, face = "bold", hjust = 0),
+    plot.title = element_text(face = "bold", hjust = 0.5),
+    axis.title = element_text(size = 11, face = "bold"),
+    axis.text = element_text(size = 10),
+    axis.line = element_line(color = "black"),
+    axis.text.y = element_blank(),
+    axis.ticks.y = element_blank(),
+    panel.spacing = unit(1, "lines")
+    legend.position = "bottom")
+
+ggsave(
+  filename = "gen_env.png", 
+  path = output_path,
+  width = 10,     
+  height = 12
+)
+```
+
+```         
+```
+
 ## 10. Environmental -\> Genetic
 
 ### 10.1 Heatmap
@@ -622,20 +932,38 @@ ggplot(gen_env_0.1, aes(x = rhoG, y = rhoE, color = trait2)) +
 ```{r}
 env_gen_matrix <- conv_matrix(env_gen, "rhoE")
 
-env_gen_heatmap<-pheatmap(
-            env_gen_matrix,
-             color = colorRampPalette(c("#440154FF", "#e8e8e8", "#21908CFF"))(100),
-            cluster_rows = FALSE, #As small, set to false
-            cluster_cols = FALSE,
-            fontsize_row = 6,
-            fontsize_col = 6,
-            show_rownames = FALSE,
-            show_colnames = TRUE,
-            na_colour = "black",  
-            main = "Both Genetic and Environmental Correlations (IP vs Proteins)",
-            border_color = NA
+ip_names_env_gen <- colnames(t(env_gen_matrix))
+
+anno_env_gen <- env_gen %>%
+  select(trait1, Lineage) %>%
+  distinct() %>%
+  filter(trait1 %in% ip_names_env_gen) %>%
+  column_to_rownames("trait1")
+
+lineage_env_gen <- anno_env_gen$Lineage
+
+col_env_gen = colorRamp2(c(-0.6, 0, 0.6), 
+                          c("#440154FF", "#e8e8e8", "#21908CFF"))
+
+env_gen_heatmap<-Heatmap(t(env_gen_matrix),
+          name = "rhoE",
+          col = col_env_gen,
+          column_split = lineage_env_gen,
+          column_title_side = "bottom",
+          column_title_gp = gpar(fontsize = 8, fontface = "bold"),
+          column_title_rot = 90,
+          cluster_rows = FALSE, 
+          cluster_columns = FALSE,
+          show_column_dend = FALSE,
+          show_column_names = FALSE,
+          show_row_names = TRUE,
+          row_names_gp = gpar(fontsize = 8),
+          na_col = "grey90",
+          border = FALSE
           )
-env_gen_heatmap
+
+draw(env_gen_heatmap, 
+     column_title = "Environmental then Genetic IP-Protein Correlations ")
 ```
 
 All positive correlations, few overlaps.
