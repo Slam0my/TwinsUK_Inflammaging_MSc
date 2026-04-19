@@ -17,6 +17,7 @@ library(stringr)
 library(dplyr)
 library(tidyr)
 library(tibble)
+library(tidyverse)
 
 #Plotting
 library(viridis) #Colour blind friendly palette
@@ -123,11 +124,11 @@ both_hits <- sum_results_combined %>%
   filter(h2r1 > 0.1 & h2r2 > 0.1 & rhoG_FDR < 0.05 & rhoE_FDR < 0.05)
 ```
 
-### 2.2 Further Filtering
+### 2.4 Further Filtering
 
 Further filtering of genetically correlated pairs with environmental associations and vise versa - environmentally correlated pairs with genetic associations.
 
-#### 2.2.1 Genetics -\> Environmental
+#### 2.4.1 Genetics -\> Environmental
 
 ```{r}
 #Genetics -> how many are also environmental 
@@ -143,7 +144,7 @@ gen_env_0.5 <- genetic_0.5_hits %>%
 #only 1 IMMUNO_41521 TNFB
 ```
 
-#### 2.2.2 Environmental -\> Genetics
+#### 2.4.2 Environmental -\> Genetics
 
 ```{r}
 #Environmental -> how many are genetics
@@ -151,7 +152,7 @@ env_gen <- environmental_hits%>%
   filter(rhoG_p0<0.05)
 ```
 
-### 2.3 Saving the output environment
+### 2.5 Saving the output environment
 
 Saving to be loaded elsewhere.
 
@@ -159,9 +160,9 @@ Saving to be loaded elsewhere.
 save.image(file = "solar_analysis_filtering_results.RData")
 ```
 
-## 3. Exploration of the overall IP-Protein Results (non-filtered)
+## 3. Exploration of the overall cohort
 
-sum_results_combined exploration. This is the general counts and distribution.
+sum_results_combined exploration. This is the general counts and distribution. IP-Protein Results (non-filtered).
 
 ### 3.1 Protein Distribution
 
@@ -298,6 +299,24 @@ print(lineage_summary)
 
 27 unique lineages across pairs.
 
+Sub Lineage investigations show order dominance of T cells -\> B cells -\> monocytes -\> NK cells -\> DC
+
+```{r}
+sum_results_combined %>%
+  group_by(Sup.Lineage) %>%
+  summarise(unique_ip_count = n_distinct(trait1)) %>%
+  arrange(desc(unique_ip_count))
+```
+
+### 3.3 Heritability 
+
+Counting how many pairs passed h2 \> 0.1 for stability.
+
+```{r}
+sum_results_combined %>%
+  count(h2r1 >0.1 & h2r2 >0.1)
+```
+
 ## 4. IP-Protein Post-Filtering Summary Statistics
 
 Show the distribution of those genetically, environmentally and both significant.
@@ -310,12 +329,17 @@ Visualising the distribution of genetic and environmental correlations.
 #From summary_results_fdr, seleting those significant for rhoG, rhoE and both
 #For purpose of graphing, we redefine the labels
 summary_results_fdr_points <- sum_results_combined %>%
- mutate(Sig_Type = case_when(
-  rhoG_FDR < 0.05 & rhoE_FDR >= 0.05 ~ "Genetic (ρG)",
-  rhoG_FDR >= 0.05 & rhoE_FDR < 0.05 ~ "Environmental (ρE)",
-  rhoG_FDR < 0.05 & rhoE_FDR < 0.05 ~ "Both ",
-  TRUE ~ "Non-Significant"
- ))
+  mutate(
+    is_genetic = h2r1 > 0.1 & h2r2 > 0.1 & rhoG_FDR < 0.05,
+    is_env     = rhoE_FDR < 0.05
+  ) %>%
+  mutate(Sig_Type = case_when(
+    is_genetic & is_env ~ "Both",
+    is_genetic         ~ "Genetic (ρG)",
+    is_env             ~ "Environmental (ρE)",
+    TRUE               ~ "Non-Significant"
+  ))%>%
+  arrange(factor(Sig_Type, levels = c("Non-Significant", "Genetic (ρG)", "Environmental (ρE)", "Both"))) #for plotting, move non sig points to the back
 
 #Plotting a graph to show the rhoG and rhoE distribution of all IP -Protein associations
 rho_dis_overall<- ggplot(summary_results_fdr_points, aes(x = rhoG, y = rhoE, color = Sig_Type)) +
@@ -326,17 +350,19 @@ rho_dis_overall<- ggplot(summary_results_fdr_points, aes(x = rhoG, y = rhoE, col
    geom_hline(yintercept = 0, linetype = "dashed", color = "grey50") +
    #Colour scale
    scale_color_manual(values = c(
-  "Both "           = "#440154FF", 
+  "Both"           = "#decb21", 
   "Genetic (ρG)"    = "#21908CFF", 
-  "Environmental (ρE)" = "#FDE725FF", 
-  "Non-Significant"  = "grey80"      
-))
-   theme_minimal() +
+  "Environmental (ρE)" = "#440154FF", 
+  "Non-Significant"  = "grey90"      
+))+
+   theme_bw() + 
    #Lablelling
    theme(
     # plot.title = element_text(hjust = 0.5,face = "bold", size = 14),
      legend.position = "none",
-     plot.subtitle = element_text(hjust = 0.5, face = "bold",size = 14))+
+     plot.subtitle = element_text(hjust = 0.5, face = "bold",size = 14),
+     axis.title.y = element_text(size = 12,face = "bold"),
+     axis.title.x = element_text(size = 12,face = "bold"))+
     # legend.position = "right",
      #legend.text = element_text(size = 12),
    #  legend.title = element_text(size = 14, face = "bold"),
@@ -362,9 +388,15 @@ ggsave(
 
 ### 4.2 Individual Lineages
 
-Graphing the indivdiual distribution of each lineage
+Graphing the individual distribution of each lineage
 
 ```{r}
+#Just for visuals, relabelling of default df
+summary_results_fdr_points <- summary_results_fdr_points %>%
+  mutate(Sup.Lineage = recode(Sup.Lineage,
+    "dendritic cells" = "DC",
+    "monocytes"       = "Monocytes"))
+
 indiv_lin_rho_dis <- ggplot(summary_results_fdr_points, aes(x = rhoG, y = rhoE, color = Sig_Type)) +
     #Adding each pair as a point
     geom_point(alpha = 0.6, size = 1) +
@@ -376,10 +408,10 @@ indiv_lin_rho_dis <- ggplot(summary_results_fdr_points, aes(x = rhoG, y = rhoE, 
     facet_wrap(~Sup.Lineage, ncol = 3) + 
     #Colour scale
      scale_color_manual(values = c(
-  "Both "           = "#440154FF", 
+  "Both"           = "#decb21", 
   "Genetic (ρG)"    = "#21908CFF", 
-  "Environmental (ρE)" = "#FDE725FF", 
-  "Non-Significant"  = "grey80"   ))+
+  "Environmental (ρE)" = "#440154FF",  
+  "Non-Significant"  = "grey90"   ))+
     #For legend dots
     guides(color = guide_legend(override.aes = list(size = 2.5))) +
     theme_bw() + 
@@ -391,16 +423,17 @@ indiv_lin_rho_dis <- ggplot(summary_results_fdr_points, aes(x = rhoG, y = rhoE, 
       legend.key.size = unit(1.2, "cm"),
       legend.key.width = unit(1, "cm"),
       strip.background = element_rect(fill = "white"), 
-      strip.text = element_text(face = "bold")
+      strip.text = element_text(face = "bold"),
+      axis.title.y = element_text(size = 12,face = "bold"),
+      axis.title.x = element_text(size = 12,face = "bold"),
     ) +
     labs(
      # title = "By Lineage",
-      subtitle = "By Lineage",
+      subtitle = "By Super-Lineage",
       x = "Genetic Correlation (ρG)",
       y = "Environmental Correlation (ρE)",
       color = "Correlation Signficance"
     )
-
 
 #Saving plot
 ggsave(
@@ -418,7 +451,7 @@ ggsave(
 #Using Patchwork
 comb_overall_rho <- (rho_dis_overall / indiv_lin_rho_dis ) + 
   plot_annotation(
-    title = "IP-Protein Association Correlation Analysis",
+    title = "IP-Protein Correlation Landscape",
     tag_levels = 'A') &
   theme(
     plot.title = element_text(size = 18, face = "bold", hjust = 0.5),
@@ -436,93 +469,14 @@ ggsave(
 )
 ```
 
-### 4.3 Volcano Plot on Genetic
-
-```{r}
-volcano_data <- sum_results_combined %>%
-  mutate(
-    log_p = -log10(rhoG_p0),
-    #Showing lineage of significnat
-    sig_lineage = if_else(rhoG_FDR < 0.05, as.character(Sup.Lineage), "Not Significant")) %>%
-    mutate(sig_lineage = factor(sig_lineage, 
-                              levels = c("Not Significant", setdiff(unique(sig_lineage), "Not Significant")))) %>%
-  arrange(sig_lineage)
-
-#Aesthetics - Colours
-unique_lineage <- setdiff(unique(volcano_data$sig_lineage), "Not Significant")
-lineage_colors <- viridis::viridis(length(unique_lineage))
-names(lineage_colors) <- unique_lineage
-final_colors <- c(lineage_colors, "Not Significant" = "grey80")
-
-#Plot
-volcano_plot <- ggplot(volcano_data, aes(x = rhoG, y = log_p, color = sig_lineage)) +
-  geom_point(alpha = 0.75, size = 0.6) +
-  scale_color_manual(values = final_colors) +
-  
-  #Lines
-  geom_vline(xintercept = 0, linetype = "dashed", color = "grey40") +
-  geom_hline(yintercept = -log10(max(volcano_data$rhoG_p0[volcano_data$rhoG_FDR < 0.05], na.rm = TRUE)), 
-             linetype = "dotted", color = "red") +
-  
-  #Lables for the top 10 proteins
-  geom_text_repel(data = volcano_data %>% 
-                      filter(rhoG_FDR < 0.05) %>% 
-                      arrange(desc(log_p)) %>%
-                      distinct(trait2, .keep_all = TRUE) %>%
-                      slice_max(order_by = log_p, n = 15),
-                    aes(label = trait2), 
-                    size = 3.5,
-                    fontface = "bold", 
-                    color = "black",
-                    show.legend = FALSE) +
-  
-  theme_classic() +
-  labs(title = " Overall Genetic Correlation Landscape (ρG)",
-       subtitle = "Significant hits. Not taking into account of heritability.",
-       x = "Genetic Correlation (ρG)",
-       y = "-log10(p-value)",
-       color = "Lineage Group") +
-  theme(legend.position = "right",
-        legend.text = element_text(size = 8),
-        legend.title = element_text(size = 10, face = "bold"))
-
-print(volcano_plot)
-
-#save
-ggsave(filename =  "volcano_genetic_landscape.png",
-       path = output_path,
-       width = 10, 
-       height = 8)
-```
-
-Top genetic hits can be bidirectional? so in graph can point out the two sides? this is not filtered for genetic
+#### Bidirectionality
 
 ```{r}
 sum_results_combined %>%
-  filter(trait2 == "CXCL10") %>%
+  filter(trait2 == "CXCL10") %>% #can filter lineage, trait 
   mutate(Direction = if_else(rhoG < 0, "Negative (-)", "Positive (+)")) %>%
   group_by(Direction) %>%
   tally()
-```
-
-```{r}
-genetic_0.1_hits %>%
-  filter(trait2 == "CXCL10") %>%
-  count(Direction = if_else(rhoG < 0, "Negative (-)", "Positive (+)"))
-```
-
-Interestingly for CXCL10/CXCL9 +(chemokines?) others, bidirection even filtered. But others like ADA are majority one direction dominant .
-
-```{r}
-lineage_direction <- genetic_0.1_hits %>%
-  filter(trait2 == "CXCL10") %>%
-  mutate(Direction = if_else(rhoG < 0, "Negative (-)", "Positive (+)")) %>%
-  group_by(Sup.Lineage, Direction) %>%
-  tally() %>%
-  arrange(Sup.Lineage, desc(n))
-
-print(lineage_direction)
-
 ```
 
 ### 4.4 Summary Table
@@ -581,6 +535,8 @@ These are genetic hits and likely instigators of inflammaging. Likely related to
 
 ### 6.1 Analysis
 
+#### 6.1.1 Number of IPs and Proteins
+
 ```{r}
 genetic_0.1_hits %>%
   summarise(
@@ -590,7 +546,7 @@ genetic_0.1_hits %>%
   )
 ```
 
-#### 6.1.1 Shared Protein Distribution
+#### 6.1.2 Shared Protein Distribution
 
 ```{r}
 #Counting how many share proteins
@@ -605,7 +561,141 @@ shared_protein_ip_gen <- table(ip_gen_sharing$protein_count)
 shared_protein_ip_gen
 ```
 
-### 6.1 Heatmap
+#### 6.1.3 Lineage Distribution
+
+```{r}
+#Lineage count
+genetic_0.1_hits %>%
+  count(Lineage, sort = TRUE)
+```
+
+```{r}
+#Sup lineage 
+genetic_0.1_hits %>%
+  group_by(Sup.Lineage) %>%
+  summarise(unique_ip_count = n_distinct(trait1)) %>%
+  arrange(desc(unique_ip_count))
+```
+
+#### 6.1.4 Bidirectionality
+
+```{r}
+genetic_0.1_hits %>%
+  filter(trait2 == "CXCL10") %>%
+  count(Direction = if_else(rhoG < 0, "Negative (-)", "Positive (+)"))
+```
+
+Interestingly for CXCL10/CXCL9 +(chemokines?) others, bidirection even filtered. But others like ADA are majority one direction dominant .
+
+```{r}
+genetic_0.1_hits %>%   
+  filter(trait2 == "CXCL10") %>%   
+  mutate(Direction = if_else(rhoG < 0, 
+                             "Negative (-)",
+                             "Positive (+)")) %>%   
+  group_by(Sup.Lineage, Direction) %>%   
+  tally() %>%   
+  arrange(Sup.Lineage, desc(n)) 
+```
+
+### 6.2 Volcano Plot
+
+To visualise the + and - distributions. Using FDR \< 0.05 threshold to define the candidates.
+
+#### 6.2.1 Overall sum_results_combined filtered for genetic_0.1_hits
+
+```{r}
+#Using the overall cohort but plotting genetic_0.1_hits for non vs sig
+volcano_data <- sum_results_combined %>%
+  filter(h2r1 > 0.1 & h2r2 > 0.1) %>%
+  mutate(
+    log_p = -log10(rhoG_p0),
+    #Showing lineage of significnat
+    sig_lineage = if_else(rhoG_FDR < 0.05, Sup.Lineage, "Not Significant")) %>%
+  #Order by lineage
+  mutate(sig_lineage = factor(sig_lineage, levels = c(
+     "T cells", "B cells", "NK cells", "monocytes", "dendritic cells","Not Significant"
+  ))) %>%
+  arrange(sig_lineage) 
+
+#Aesthetics - Colours
+final_colors <- c(
+  "T cells"         = "#440154FF", 
+  "B cells"         = "#404688FF",
+  "NK cells"        = "#21908CFF",
+  "monocytes"       = "#7AD151FF", 
+  "dendritic cells" = "#FDE725FF", 
+  "Not Significant" = "grey90"     
+)
+
+#Labelling of top proteins
+vol_labels_data <- volcano_data %>%
+  filter(rhoG_FDR < 0.05) %>%
+  mutate(direction = ifelse(rhoG > 0, "Positive", "Negative")) %>%
+  group_by(trait2, direction) %>%
+  slice_max(order_by = log_p, n = 1) %>%
+  ungroup() %>%
+  group_by(direction) %>%
+  slice_max(order_by = log_p, n = 15) %>%
+  ungroup()
+
+#Plot
+volcano_plot <- ggplot(volcano_data, aes(x = rhoG, y = log_p, color = sig_lineage)) +
+  #As T + B cell colour hinders labelling visuals change alpha
+  geom_point(data = filter(volcano_data, sig_lineage %in% c("T cells", "B cells")), 
+             aes(color = sig_lineage), alpha = 0.5, size = 1.5) +
+  #The rest of the points
+  geom_point(data = filter(volcano_data, !sig_lineage %in% c( "T cells", "B cells")), 
+             aes(color = sig_lineage), alpha = 0.85, size = 1.5) +
+  
+  #geom_point(alpha = 0.7, size = 1.5) +
+  scale_color_manual(values = final_colors) +
+  
+  #Lines
+  geom_vline(xintercept = 0, linetype = "dashed", color = "grey40") +
+  geom_hline(yintercept = -log10(max(volcano_data$rhoG_p0[volcano_data$rhoG_FDR < 0.05])), #as used FDR threshold, can't use P-value -log10(0.05)
+             linetype = "dotted", color = "red") +
+  
+  #Lables for the top 10 proteins
+  geom_text_repel(data = vol_labels_data,
+                    aes(label = trait2), 
+                    size = 3.5,
+                    fontface = "bold", 
+                    color = "black",
+                    bg.color = "white",
+                    bg.r = 0.07,
+                    show.legend = FALSE) +
+  
+  theme_bw() +
+  labs(title = "Significant Genetic Hits (ρG) in the Total Cohort",
+       x = "Genetic Correlation (ρG)",
+       y = "-log10(P-Value)",
+       color = "Lineage Group") +
+  theme(
+        legend.text = element_text(size = 10),
+        legend.position = "bottom",
+        legend.title = element_text(size = 10, face = "bold"),
+        axis.title.y = element_text(size = 12,face = "bold"),
+        axis.title.x = element_text(size = 12,face = "bold"),
+        plot.title = element_text(hjust = 0.5, face = "bold", size = 14,margin = margin(b = 20)),
+        strip.background = element_rect(fill = "white"), 
+        strip.text = element_text(face = "bold")
+      ) 
+
+print(volcano_plot)
+
+#save
+ggsave(filename =  "volcano_genetic_hits_landscape.png",
+       path = output_path,
+       width = 8, 
+       height = 8)
+```
+
+#### 6.2.1 genetic_0.1_hits by lineage 
+
+Perhaps create faceted/ mini plots for each lineage for the sub.lineages. Example one faceted plot of each lineage for T cells then another for B cells... etc.
+
+### 6.3 Heatmap
 
 ```{r}
 genetic_matrix <- conv_matrix(genetic_0.1_hits, "rhoG")
@@ -661,8 +751,6 @@ draw(genetic_heatmap, column_title = "Genetic Architecture of IP-Protein Pairs")
 Environmental markers - reactive in response externally. Likely not realted to ageing.
 
 ### 7.1 Heatmap
-
-"#21908CFF"
 
 ```{r}
 environmental_matrix <- conv_matrix (environmental_hits, "rhoE")
@@ -722,6 +810,19 @@ All hits are positive. Only CXCL9 protein has IP associations.
 Overall CXCL9 had the phenotype pP correlation.
 
 Deriving from genetic pG and environmental pE but rhoG is stronger/more dominant than rhoE.
+
+```{r}
+#Obtaining average of IPs and Protein as they are aLL CD8 T cell lineage with CXCL9
+both_hits %>%
+  summarise (
+    mean_h2r1 = mean(h2r1),
+    sd_h2r1   = sd(h2r1),
+    max_h2r1 = max(h2r1),
+    mean_h2r2 = mean(h2r2),
+    sd_h2r2= sd(h2r2),
+    max_h2r2 = max(h2r2)
+  )
+```
 
 ```{r}
 #Plotting with different graph
@@ -795,7 +896,7 @@ print(stats_rhoE$sd)
 
 ```
 
-CXCL9 more geneticaly correlated than environmental counterpart though both significant. Heterogeneity of immune cell influence. MEAN and SD purely for trend, no biological context. Effect size are significantly higher in genetic than environmental . They are all from CD8 T cell lineage.
+CXCL9 more genetically correlated than environmental counterpart though both significant. Heterogeneity of immune cell influence. MEAN and SD purely for trend, no biological context. Effect size are significantly higher in genetic than environmental . They are all from CD8 T cell lineage.
 
 ## 9. Genetic -\> Environmental
 

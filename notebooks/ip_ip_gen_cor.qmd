@@ -87,7 +87,7 @@ If I use this way to find the genetic associatiosn with IP-IP then wouldn't I al
 
 With finding the IP-IP matrix, there is potential to explore the cell lineages.
 
-## 2.1 Matrix
+## 2 Matrix
 
 Conversion of the genetic_0.1_hits is necessary from a long to wide format with rows as IPs, columns as proteins and entries as RhoG (pG) . There will be lots of NAs as the majority of IPs do not significnatly associate with 2+ proteins.
 
@@ -126,7 +126,7 @@ IP_protein_mat_filt <- IP_protein_mat[keep_IPs,]
 
 ```
 
-## 3.1 Pearson's Correlation
+## 3 Pearson's Correlation
 
 Creates a large IP-IP matrix
 
@@ -183,7 +183,7 @@ hard to visualise
 
 filter by lineage as graph crashes too much memory
 
-## 3.2 Jaccard Similarity
+## 4 Jaccard Similarity
 
 ### 3.2.1 Shared Protein Distribution
 
@@ -332,17 +332,34 @@ Regardless of weight, checking jaccard score 1.0. These have 3 proteins shared w
 
 Specific sub.lineages has highest connection to others? How many sub connects to sub
 
-## 3.3 Graphing
+# Shortcut Data FOR GRAPHING
+
+delete when finalise
+
+```{r}
+save.image(file = "ip_ip_jaccard.RData")
+```
+
+LOADING
+
+```{r}
+#Loading in the dataset for .lineage information 
+load("~/Twins_Project/notebooks/ip_ip_jaccard.RData")
+```
+
+## 5 Graphing
 
 I need to graph (1) intra vs cross lineage realationships (2) Top : shared proteins count, total protein in x and y (3) Jaccard weighted scores?
 
 ### 
 
+heatmap : outside has lineages groupings.. each point is a bubble, bubble size is jaccard score but then how to represent the number of proteins each and shared?
+
 Focus on cross lineage bridges.
 
 OVERALL GOAL: These top IP-IP pairs, need to compare with which proteins are they sharing
 
-### 3.3. Lineage 
+### 3.3. Lineage
 
 Sankey diagram for sup -\> sub -\> top shared
 
@@ -350,7 +367,9 @@ or
 
 lineage a -\> PROTEIN SHARED -\> lineage B?
 
-### 3.3. Cross lineage chord diagram based 
+instead of chord try heirachicla edge bundling
+
+### 3.3. Cross lineage chord diagram based
 
 #### Weighted Jaccard score
 

@@ -143,7 +143,7 @@ scale_edge_colour_gradient(low = "black", high = "grey80") +
    legend.text = element_text(size = 6),
    legend.title = element_text(size = 8, face = "bold"))+
   labs(title = "Protein-Protein Genetic Correlation Network",
-       subtitle = "Based on SOLAR analysis results (H2r > 0.1)",
+       subtitle = "Based on SOLAR analysis results (H²r > 0.1)",
        edge_color = "rhoG",
        color = "Module") +
   guides(edge_width = "none")
@@ -168,6 +168,8 @@ SCF and CCL20 are the only protein pair to have a negative rhoG. When searching 
 -   filtering of the genetic and those that are environmetally?
 
 -   instead of representing the colours, add in circles
+
+NEED DOTTED LINE FOR NEgative relation .
 
 ```{r}
 
@@ -206,7 +208,7 @@ ggraph(tg_prot, layout = "fr") +
    legend.title = element_text(size = 9, face = "bold"))+
   labs(
     title = "Protein-Protein Genetic Correlation Network",
-    subtitle = "Based on SOLAR analysis results (H2r > 0.1)",
+    subtitle = "Based on SOLAR analysis results (H²r > 0.1)",
     edge_colour = "rhoG",
     color = "Module Group",
     size = "Centrality"
