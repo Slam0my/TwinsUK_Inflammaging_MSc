@@ -26,7 +26,7 @@ library(dplyr) # For dataframe manipulation
 Double checking the working directory location
 
 ```{r}
-setwd("~/Twins_Project/notebooks/data_exploration")
+setwd("~/Twins_Project/notebooks/")
 ```
 
 ### 1.3 Save path
@@ -131,14 +131,14 @@ age_zyg_plot<- ggplot(dataset_clean, aes(x = Age_Bin, fill = Z)) +
 #Saving plot
 ggsave(
   plot = age_zyg_plot,
-  filename = "age_zyg_plot.png", 
+  filename = "overall_cohort/Age_Plot_Raw.png", 
   path = output_path,
   width = 10,     
   height = 5
 )
 ```
 
-2.3.2.2 Remove unpaired twins.
+##### 2.3.2.2 Remove unpaired twins.
 
 ```{r}
 #For downstream analysis, only want complete pair so we need to remove the singletons
@@ -191,7 +191,7 @@ age_zyg_plot<- ggplot(dataset_pairs, aes(x = Age_Bin, fill = Z)) +
 
 #Saving plot
 ggsave(
-  filename = "rm_age_zyg_plot.png", 
+  filename = "overall_cohort/Age_Plot_Filtered.png",  
   path = output_path,
   width = 10,     
   height = 5
@@ -211,6 +211,8 @@ dataset %>%
   filter(`QC Warning` == "Warning") %>%
   pull (id)
 ```
+
+##### 2.3.3.1 Final Filtering
 
 We need to remove those 7 and their twin so 14 individuals.
 
@@ -253,7 +255,7 @@ age_zyg_plot<- ggplot(dataset_clean, aes(x = Age_Bin, fill = Z)) +
 
 #Saving plot
 ggsave(
-  filename = "final_age_zyg_plot.png", 
+  filename = "overall_cohort/Age_Plot_Final.png", 
   path = output_path,
   width = 10,     
   height = 5
@@ -320,12 +322,19 @@ cat("Median:   ", median(dataset_final$BMI[dataset_final$Z == "DZ"]), "\n") #Med
 #### BMI Graph
 
 ```{r}
+BMI_data <- dataset_final %>%
+  mutate(Group = as.character(Z)) %>%
+ bind_rows(
+    dataset_final %>% mutate(Group = "Total")
+  ) %>%
+  mutate(Group = factor(Group, levels = c("Total", "DZ", "MZ")))
+
 #Graph
 ggplot(BMI_data, 
        aes(x = BMI, fill = Group, color = Group)) + #Fill
         geom_density(alpha = 0.2)+ #Line thickness
         geom_density(aes(color = Group), alpha = 0, linewidth = 0.8) + #Adding mean lines
-        geom_vline(data = plot_data %>%
+        geom_vline(data = BMI_data %>%
         group_by(Group) %>%
         summarize(m = mean(BMI)),
         aes(xintercept = m, color = Group),
@@ -339,17 +348,18 @@ ggplot(BMI_data,
         scale_fill_viridis_d(option = "viridis") +
         scale_color_viridis_d(option = "viridis") +
         theme_minimal() +
-        theme(legend.position = "right",
+        theme(legend.position = c(0.85, 0.6),
               plot.title = element_text(face = "bold", hjust = 0.5),
               panel.grid.major = element_blank(), 
               panel.grid.minor = element_blank(),
               axis.title = element_text(size = 11, face = "bold"),
-              axis.text = element_text(size = 10)
+              axis.text = element_text(size = 10),
+              axis.line = element_line(color = "black", linewidth = 0.5)
         )
 
 #Saving plot
 ggsave(
-  filename = "bmi_dis.png", 
+  filename = "overall_cohort/BMI_Graph.png",  
   path = output_path,
   width = 10,     
   height = 5

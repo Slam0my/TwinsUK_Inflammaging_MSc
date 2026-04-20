@@ -187,7 +187,7 @@ filter by lineage as graph crashes too much memory
 
 ### 3.2.1 Shared Protein Distribution
 
-Displaying the distribution again from the previous qmd
+Displaying the distribution of IPs sharing Protein counts
 
 ```{r}
 #Counting how many share proteins
@@ -270,7 +270,7 @@ ip_lineage_check <- weight_ip_jaccard %>%
   left_join(lineage_ip, by = c("IP_B" = "IP")) %>%
   rename(Sup_B = Sup.Lineage, Sub_B = Sub.Lineage) %>%
   
-  mutate(Relationship = if_else(Sub_A == Sub_B, "Intra-Lineage", "Cross-Lineage")) %>%
+  mutate(Relationship = if_else(Sup_A == Sup_B, "Intra-Lineage", "Cross-Lineage")) %>%
   filter(shared_count > 1) %>% #Applying filtering 
   arrange(desc(weighted))
 
@@ -347,7 +347,11 @@ LOADING
 load("~/Twins_Project/notebooks/ip_ip_jaccard.RData")
 ```
 
-## 5 Graphing
+## 5 Intra-Lineage
+
+## 6 Cross-Lineage
+
+## Graphing
 
 I need to graph (1) intra vs cross lineage realationships (2) Top : shared proteins count, total protein in x and y (3) Jaccard weighted scores?
 
@@ -369,7 +373,7 @@ lineage a -\> PROTEIN SHARED -\> lineage B?
 
 instead of chord try heirachicla edge bundling
 
-### 3.3. Cross lineage chord diagram based
+### Cross lineage chord diagram based
 
 #### Weighted Jaccard score
 
@@ -428,4 +432,15 @@ legend("bottomleft", title = "Weighted Jaccard Score",
        fill = c("#440154FF","#21908CFF"), bty = "n")
 
 circos.clear()
+```
+
+```{r}
+# 1. Filter the Jaccard table to keep only the strongest connections
+# A threshold of 0.2-0.5 is usually good for visualizing significant overlap
+ip_ip_edges <- jaccard_results %>%
+  filter(jaccard_score > 0.3) %>% 
+  select(IP_A, IP_B, jaccard_score)
+
+# 2. Create the graph object
+ip_graph <- graph_from_data_frame(ip_ip_edges, directed = FALSE)
 ```
