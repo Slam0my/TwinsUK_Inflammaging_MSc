@@ -20,6 +20,7 @@ library(tibble)
 #Graphs
 library(viridis) #Colour blind friendly palette
 library(ggplot2)
+library(patchwork) #Panelling
 
 #Heatmap 
 library(pheatmap) #static
@@ -39,10 +40,8 @@ library(circlize)
 
 ```{r}
 #Loading in the solar results analysis filtering.
-load("~/Twins_Project/scripts/solar_analysis/solar_analysis_filtering_results.RData")
+load("~/Twins_Project/notebooks/solar_analysis_filtering_results.RData")
 
-#Loading in the dataset for .lineage information 
-load("~/Twins_Project/data/raw_olink_ip/results/Olink_associations.RData")
 ```
 
 As a reminder, genetic_0.1_hits, genetic_0.3_hits, environmental_hits and both_hits are FDR filtered 0.05.
@@ -58,7 +57,7 @@ sum_results_combined contains the FDR filtered plus lineage columns.
 Defining an output path where I will save the visualisations generated to.
 
 ```{r}
-output_path <- "~/Twins_Project/visualisations"
+output_path <- "~/Twins_Project/visualisations/ip_ip"
 ```
 
 # IP-IP Genetic Associations
@@ -353,14 +352,6 @@ load("~/Twins_Project/notebooks/ip_ip_jaccard.RData")
 
 ## Graphing
 
-I need to graph (1) intra vs cross lineage realationships (2) Top : shared proteins count, total protein in x and y (3) Jaccard weighted scores?
-
-### 
-
-heatmap : outside has lineages groupings.. each point is a bubble, bubble size is jaccard score but then how to represent the number of proteins each and shared?
-
-Focus on cross lineage bridges.
-
 OVERALL GOAL: These top IP-IP pairs, need to compare with which proteins are they sharing
 
 ### 3.3. Lineage
@@ -434,13 +425,139 @@ legend("bottomleft", title = "Weighted Jaccard Score",
 circos.clear()
 ```
 
-```{r}
-# 1. Filter the Jaccard table to keep only the strongest connections
-# A threshold of 0.2-0.5 is usually good for visualizing significant overlap
-ip_ip_edges <- jaccard_results %>%
-  filter(jaccard_score > 0.3) %>% 
-  select(IP_A, IP_B, jaccard_score)
+### only cross lineage pairs \>1  or 2? with jaccard score of 0.75 above?
 
-# 2. Create the graph object
-ip_graph <- graph_from_data_frame(ip_ip_edges, directed = FALSE)
+```{r}
+
+chord_data <- ip_lineage_check %>%
+  group_by(Sup_A, Sup_B) %>%
+  summarise(total_weight = sum(weighted), .groups = 'drop')
+
+# Plot the chord diagram
+chordDiagram(chord_data)
 ```
+
+#### only filtered 7+ intra lineage
+
+### IP-IP Shared Protein By Lineage Relationship
+
+```{r}
+ip_bar_shared <- ggplot(ip_lineage_check, aes(x = as.factor(shared_count))) +
+  geom_bar(aes(fill = as.factor(shared_count)), color = "white", alpha = 0.8,show.legend = FALSE) +
+  #Label
+  geom_text(stat = "count", 
+            aes(label = after_stat(count)), 
+            vjust = -0.5, size = 3, fontface = "bold") +
+  
+  #Colour
+  scale_fill_viridis_d(option = "viridis") +
+  
+  #Facet Panel
+  facet_wrap(~Relationship, ncol = 1) +
+  #Scales
+  scale_y_log10(breaks = c(1, 10, 100, 1000, 10000, 100000),
+                limits = c(1, 150000),
+                labels = function(x) format(x, big.mark = ",", scientific = FALSE)
+  ) +
+  #Labels
+  labs(
+    title = "IP-IP Pairs By Protein Shared Frequency",
+    x = "Number of Shared Proteins",
+    y = "Frequency (IP-IP Pairs)"
+  ) +
+  
+  theme_bw() +
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 14),
+    strip.background = element_rect(fill = "white"),
+    strip.text = element_text(face = "bold", size = 12),
+    axis.title = element_text(face = "bold", size = 12),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank()
+    )
+
+#Saving plot
+ggsave(
+  filename = "IP_IP_Prot_Shared.png", 
+  plot = ip_bar_shared,
+  path = output_path,
+  width = 8,     
+  height = 8
+)
+```
+
+### Density of Jaccard Scores
+
+```{r}
+#Need to group to find frequency
+density_freq_plot_data <- ip_lineage_check %>%
+  group_by(Relationship, shared_count, jaccard_score) %>%
+  summarise(freq = n(), .groups = "drop")
+
+#Plot
+density_jaccard_plot <- ggplot(density_freq_plot_data, aes(x = as.factor(shared_count), y = jaccard_score)) +
+  #Point
+  geom_point(aes(fill = freq, size = freq), shape = 21, color = "black", alpha = 0.8) +
+  #Log Colours
+  scale_fill_viridis_c(trans = "log10", option = "viridis", name = "Frequency (log)",breaks = c(1, 10, 100, 1000, 10000), guide = "legend") +
+  
+  scale_size_continuous(trans = "log10", range = c(2, 10), name = "Frequency (log)", breaks = c(1, 10, 100, 1000, 10000)) +
+  #Panel
+  facet_wrap(~Relationship, ncol = 1) +
+  
+  labs(
+    title = "Jaccard Score Density",
+    x = "Number of Shared Proteins",
+    y = "Jaccard Similarity Score"
+  ) +
+  theme_bw() +
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 14),
+    strip.background = element_rect(fill = "white"),
+    strip.text = element_text(face = "bold", size = 12),
+    panel.grid.minor = element_blank(),
+    axis.title = element_text(face = "bold", size = 12),
+    legend.position = "right"
+
+  )
+
+#Saving plot
+ggsave(
+  filename = "IP_IP_Jac_Score.png", 
+  plot = density_jaccard_plot,
+  path = output_path,
+  width = 8,     
+  height = 8
+)
+```
+
+### Combining into two panels
+
+```{r}
+combined_panels <- ip_bar_shared/ density_jaccard_plot +
+  plot_layout(heights = c(1, 1.5)) +
+  plot_annotation(tag_levels = 'A')
+
+ggsave(
+  filename = "IP_IP_Panels_Combined.png", 
+  plot = combined_panels
+  path = output_path,
+  width = 8,     
+  height = 12
+)
+```
+
+# IMPROVEMENTS:
+
+-   lineage pairings
+
+-   facet by super lineage
+
+    ```{r}
+    ggplot(ip_lineage_check, aes(x = as.factor(shared_count))) +
+      geom_bar(fill = "#21908c", color = "white", alpha = 0.8) +
+      facet_grid(Sup_A ~ Sup_B) + 
+      labs(title = "Regulatory Robustness by Lineage Interaction",
+           x = "Number of Shared Proteins", y = "Frequency") +
+      theme(strip.text = element_text(size = 8, face = "bold"))
+    ```
