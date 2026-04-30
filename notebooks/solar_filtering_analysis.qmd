@@ -28,8 +28,6 @@ library(patchwork) #Combine Plots
 #Heatmap
 library(ComplexHeatmap)
 
-#library(circlize)
-
 #Network graphs
 library(igraph)
 library(ggraph)
@@ -174,7 +172,42 @@ save.image(file = "solar_analysis_filtering_results.RData")
 
 sum_results_combined exploration. This is the general counts and distribution. IP-Protein Results (non-filtered).
 
-### 3.1 Protein Distribution
+### 3.1 Baseline ρP Phenotype Correlation
+
+To validate the total correlations observed between IP-protein associations.
+
+```{r}
+rhoP_plot<- ggplot(sum_results_combined, aes(x = rhoP)) +
+  geom_histogram(bins = 50, fill = "#440154FF", color = "white") +
+  #Labels
+  labs(title = "Distribution of Phenotypic Correlations (ρP)",
+       x = "Phenotypic Correlation (ρP)",
+       y = "Frequency") +
+  #Aesthetics
+ theme_minimal() +
+  theme(
+    axis.text.y = element_text(size = 10),     
+    axis.title.y = element_text(size = 12,face = "bold"),
+    axis.text.x = element_text(size = 10),
+    axis.title.x = element_text(size = 12,face = "bold"),
+    plot.title = element_text(size = 14, face = "bold",hjust = 0.5, margin = margin(b = 10)),
+    plot.title.position = "plot",
+    legend.position = "none",
+    axis.line = element_line(color = "black"),
+    panel.grid.major.y = element_blank() #No vertical lines
+  )
+
+#Saving plot
+ggsave(
+  filename = "overall_cohort/Phenotypic_Correlation_Distribution.png", 
+  plot = rhoP_plot,
+  path = output_path,
+  width = 12,     
+  height = 8
+)
+```
+
+### 3.2 Protein Distribution
 
 Analysing how many proteins per IPs are present in each filtering.
 
@@ -244,7 +277,7 @@ In the 0.1 and 0.3 top hits, find what proteins are most frequent/popular for ge
 Better Visualisation.
 
 ```{r}
-ip_per_protein %>%
+top_15_proteins <- ip_per_protein %>%
   slice_max(n_IPs, n = 15, with_ties = FALSE) %>%
   ggplot(aes(x = reorder(trait2, n_IPs), y = n_IPs)) +
   geom_col(aes(fill = n_IPs), alpha = 0.8, color = "white", linewidth = 0.3) +
@@ -277,6 +310,7 @@ ip_per_protein %>%
 #Saving plot
 ggsave(
     filename = "overall_cohort/Overall_Top_15_Protein_Distribution.png", 
+    plot = top_15_proteins,
   path = output_path,
   width = 10,     
   height = 8
@@ -322,7 +356,7 @@ ip_shared_prot_plot <- ggplot(ip_shared_prot_df, aes(x = Num_Proteins, y = Count
   #Axis
   coord_flip() +
 
-  labs(title = "Overall Protein Connectivity to IP Distribution",
+  labs(title = "Protein Connectivity to IP Distribution",
        x = "Number of Proteins Connected to a Single IP", y = "Number of IPs ") +
   theme_minimal() +
   theme(
@@ -343,6 +377,40 @@ ggsave(
   path = output_path,
   width = 10,     
   height = 8
+)
+```
+
+### Plot Combination
+
+```{r}
+
+spacer <-("
+  #1111#
+  222333
+")
+
+overall_ip_prot_dis_panels <- (rhoP_plot)/
+  (top_15_proteins + ip_shared_prot_plot)+
+    plot_layout(heights = c(1, 1))
+
+  overall_ip_prot_dis_panels<- rhoP_plot +top_15_proteins+ip_shared_prot_plot +plot_layout(design = spacer)+
+  
+plot_annotation(
+    title = "Overall IP-Protein Distribution in the Total Cohort ",
+    tag_levels = 'A') &
+  theme(
+    plot.title = element_text(size = 18, face = "bold", hjust = 0.5),
+    plot.tag = element_text(size = 20, face = "bold") 
+  )
+
+print (overall_ip_prot_dis_panels)
+#Saving 
+ggsave(
+  filename = "overall_cohort/Overall_IP_Prot_Final_Panel.png",
+  plot = overall_ip_prot_dis_panels,
+  path = output_path,
+  width = 20,
+  height = 16
 )
 ```
 
@@ -616,7 +684,7 @@ print(ip_per_protein_gen)
 ```
 
 ```{r}
-ip_per_protein_gen %>%
+gen_top15_prot <-ip_per_protein_gen %>%
   slice_max(n_IPs, n = 15, with_ties = FALSE) %>%
   ggplot(aes(x = reorder(trait2, n_IPs), y = n_IPs)) +
   geom_col(aes(fill = n_IPs), alpha = 0.8, color = "white", linewidth = 0.3) +
@@ -631,7 +699,7 @@ ip_per_protein_gen %>%
     limits = c(0, 1500),               
     expand = expansion(mult = c(0, 0.1)))+
   #Labelling
-  labs(title = "Top 15 Proteins by Number of IP Connections (Genetically Significant)",
+  labs(title = "Top 15 Proteins by Number of IP Connections",
        x = "Protein", y = "Number of IPs ") +
   theme_minimal() +
   theme(
@@ -648,6 +716,7 @@ ip_per_protein_gen %>%
 #Saving plot
 ggsave(
   filename = "genetic_hits/Gen_Top_15_Protein_Distribution.png", 
+  plot = gen_top15_prot,
   path = output_path,
   width = 10,     
   height = 8
@@ -685,7 +754,7 @@ ip_shared_prot_plot_gen <- ggplot(ip_shared_prot_df_gen, aes(x = Num_Proteins, y
   #Axis
   coord_flip() +
 
-  labs(title = "Protein Connectivity to IP Distribution in Significant Genetically Correlated Pairs",
+  labs(title = "Protein Connectivity to IP Distribution",
        x = "Number of Proteins Connected to a Single IP", y = "Number of IPs ") +
   theme_minimal() +
   theme(
@@ -703,6 +772,7 @@ plot(ip_shared_prot_plot_gen)
 #Saving plot
 ggsave(
   filename = "genetic_hits/Gen_IP_Prot_Distribution.png", 
+  plot = ip_shared_prot_plot_gen,
   path = output_path,
   width = 10,     
   height = 8
@@ -816,7 +886,7 @@ print(gen_bidirection_counts)
 Graphing the bidirectionality by proportion in super lineages
 
 ```{r}
-ggplot(gen_bidirection_counts, aes(x = Direction, y = n, fill = Direction)) +
+gen_bidirection <- ggplot(gen_bidirection_counts, aes(x = Direction, y = n, fill = Direction)) +
   geom_col() +
   geom_text(aes(label = n), vjust = -0.5, size = 3,color = "black", fontface = "bold") +
   facet_wrap(~Sup.Lineage, scales = "free_y") +
@@ -835,13 +905,14 @@ ggplot(gen_bidirection_counts, aes(x = Direction, y = n, fill = Direction)) +
       axis.title.y = element_text(size = 12,face = "bold"),
       axis.title.x = element_text(size = 12,face = "bold"),
     ) +
-  labs(title = "Genetic Correlation Directionality by Lineage",
+  labs(title = "Directionality by Lineage",
        y = "Number of Significant Genetic Hits")
 
 
 #Saving plot
 ggsave(
   filename = "genetic_hits/Gen_Direction_Lineage.png", 
+  plot = gen_bidirection,
  path = output_path,
   width = 12,     
   height = 8
@@ -870,6 +941,35 @@ genetic_0.1_hits %>%
   group_by(Sup.Lineage, Direction) %>%  
   tally() %>%   
   arrange(Sup.Lineage, desc(n)) 
+```
+
+#### Panelling
+
+```{r}
+
+gen_panels <-  (gen_bidirection) /(gen_top15_prot + ip_shared_prot_plot_gen)+
+    plot_layout(heights = c(1, 1))
+
+gen_panels <- gen_bidirection + gen_top15_prot + ip_shared_prot_plot_gen +
+  
+  plot_layout(design = spacer) +
+  
+  plot_annotation(
+    title = "Genetically Significant IP-Protein Overview",
+    tag_levels = 'A'
+  ) &
+  theme(
+    plot.title = element_text(size = 24, face = "bold", hjust = 0.5),
+    plot.tag.position = c(0.08, 0.99),
+    plot.tag = element_text(size = 24, face = "bold"))
+
+ggsave(
+  filename = "genetic_hits/Genetic_Panels.png",
+  plot = gen_panels,
+  path = output_path,
+  width = 20,
+  height = 16
+)
 ```
 
 ### 6.2 Network graph with the Hubs
@@ -1058,7 +1158,7 @@ print(ip_per_protein_env)
 ```
 
 ```{r}
-ip_per_protein_env %>%   
+env_top15_prot <- ip_per_protein_env %>%   
   slice_max(n_IPs, n = 15, with_ties = FALSE) %>%   
   ggplot(aes(x = reorder(trait2, n_IPs), y = n_IPs)) +   geom_col(aes(fill = n_IPs), 
                                                                   alpha = 0.8, color = "white", 
@@ -1070,7 +1170,7 @@ ip_per_protein_env %>%
   coord_flip() +   
   scale_y_continuous(limits = c(0, 500),                    expand = expansion(mult = c(0, 0.1)))+   
   #Labelling   
-  labs(title = "Top 15 Proteins by Number of IP Connections (Environmentally Significant)",        
+  labs(title = "Top 15 Proteins by Number of IP Connections",        
        x = "Protein",
        y = "Number of IPs ") +   
   theme_minimal() +   
@@ -1086,7 +1186,8 @@ ip_per_protein_env %>%
 
 #Saving plot 
 ggsave(   
-  filename = "environmental_hits/Env_Top_15_Protein_Distribution.png",    
+  filename = "environmental_hits/Env_Top_15_Protein_Distribution.png",
+  plot = env_top15_prot,
   path = output_path,   
   width = 10,        
   height = 8 )
@@ -1123,7 +1224,7 @@ ip_shared_prot_plot_env <- ggplot(ip_shared_prot_df_env,
   scale_fill_viridis_c(option = "viridis")+   
   #Axis   
   coord_flip() +    
-  labs(title = "Protein Connectivity to IP Distribution in Significant Environmentally Correlated Pairs",        
+  labs(title = "Protein Connectivity to IP Distribution",        
        x = "Number of Proteins Connected to a Single IP", y = "Number of IPs ") +  
   theme_minimal() +   
   theme(     
@@ -1143,6 +1244,7 @@ plot(ip_shared_prot_plot_env)
 #Saving plot 
 ggsave(   
   filename = "environmental_hits/Env_IP_Prot_Distribution.png",    
+  plot = ip_shared_prot_plot_env,
   path = output_path,   
   width = 10,        
   height = 8 )
@@ -1191,7 +1293,7 @@ print(env_bidirection_counts)
 Graphing the bidirectionality by proportion in super lineages
 
 ```{r}
-ggplot(env_bidirection_counts, 
+env_bidirection<- ggplot(env_bidirection_counts, 
        aes(x = Direction, y = n, fill = Direction)) +   
   geom_col() +   
   geom_text(aes(label = n), vjust = -0.5, size = 3,color = "black", fontface = "bold") +   
@@ -1211,16 +1313,46 @@ ggplot(env_bidirection_counts,
     axis.title.y = element_text(size = 12,face = "bold"),      
     axis.title.x = element_text(size = 12,face = "bold"),   
     ) +   
-  labs(title = "Environmental Correlation Directionality by Lineage",        
+  labs(title = "Directionality by Lineage",        
        y = "Number of Significant Genetic Hits")   
 
 
 #Saving plot 
 ggsave(   
   filename = "environmental_hits/Env_Direction_Lineage.png",
+  plot = env_bidirection,
   path = output_path,   
   width = 12,        
   height = 8 )
+```
+
+### paneling
+
+```{r}
+
+env_panels <-  (env_bidirection) /(env_top15_prot + ip_shared_prot_plot_env)+
+    plot_layout(heights = c(1, 1))
+
+env_panels <- env_bidirection + env_top15_prot + ip_shared_prot_plot_env +
+  
+  plot_layout(design = spacer) +
+  
+  plot_annotation(
+    title = "Environmentally Significant IP-Protein Overview",
+    tag_levels = 'A'
+  ) &
+  theme(
+    plot.title = element_text(size = 24, face = "bold", hjust = 0.5),
+    plot.tag.position = c(0.08, 0.99),
+    plot.tag = element_text(size = 24, face = "bold"))
+
+ggsave(
+  filename = "environmental_hits/Environmental_Panels.png",
+  plot = env_panels,
+  path = output_path,
+  width = 20,
+  height = 16
+)
 ```
 
 ### 7.6 Network graph with the Hubs

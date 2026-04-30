@@ -20,11 +20,18 @@ library(tibble)
 #Graphs
 library(viridis) #Colour blind friendly palette
 library(ggplot2)
-library(patchwork) #Panelling
+
+#Panelling
+library(patchwork) 
+library(cowplot)
+library(png)
+library(grid)
 
 #Sankey
 library(networkD3)
 library(htmlwidgets)
+library(htmltools)
+library(webshot2)
 
 #Network graphs
 library(igraph)
@@ -351,15 +358,24 @@ ggsave(
 ### 4.3 Combining the previous two graphs for paneling
 
 ```{r}
-combined_panels <- ip_bar_shared|density_jaccard_plot +
-  plot_annotation(tag_levels = 'A')
+ip_bar_shared <- ip_bar_shared + 
+  labs(tag = "A") + 
+  theme(plot.tag.position = c(0.02, 0.95), plot.tag = element_text(size = 20, face = "bold"))
+
+density_jaccard_plot <- density_jaccard_plot + 
+  labs(tag = "B") + 
+  theme(plot.tag.position = c(-0.02, 0.95), plot.tag = element_text(size = 20, face = "bold"))
+
+combined_panels <- (ip_bar_shared | plot_spacer() | density_jaccard_plot) +
+  plot_layout(widths = c(1, 0.25, 1))
 
 ggsave(
   filename = "IP_IP_Panels_Combined.png", 
   plot = combined_panels,
   path = output_path,
-  width = 16,     
-  height = 8
+  width = 18,     
+  height = 8,
+  dpi = 600
 )
 ```
 
@@ -414,6 +430,51 @@ print(cluster_summary)
 ```
 
 Even in each super lineage, sub lineages do not cross talk. No mixing of cells. This infers stability.
+
+### 5.3 Heatmap for Cluster
+
+```{r}
+#Convert to long format from wide
+cluster_summary_long <- cluster_summary %>%
+  pivot_longer(
+    cols = -Cluster, 
+    names_to = "Sub_Lineage", 
+    values_to = "Count"
+  )
+
+#Heatmap for 7+ protein sharing hub as above
+cluster_7_heatmap<-ggplot(cluster_summary_long, aes(x = as.factor(Cluster), y = Sub_Lineage, fill = Count)) +
+  geom_tile() +
+  scale_fill_gradient(low = "white", high = "#440154FF") +#Colour scale
+  labs(title = "Intra-Lineage Clusters (7+ Shared Proteins)",
+       x = "Cluster (Louvain)",
+       y = "Sub-Lineage") +
+  #Aesthetic
+  theme_bw() +
+  theme(
+    plot.title = element_text(size = 12, face = "bold",hjust = 0.5, margin = margin(b = 10)),
+    strip.background = element_rect(fill = "white"),
+    strip.text = element_text(face = "bold", size = 12),
+    axis.title = element_text(face = "bold", size = 12),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    legend.text = element_text(size = 8),
+    legend.title = element_text(size = 10, face = "bold"),
+    axis.text.y = element_text(size = 8),     
+    axis.title.y = element_text(size = 10,face = "bold"),
+    axis.text.x = element_text(size = 8),
+    axis.title.x = element_text(size = 10,face = "bold")
+    ) 
+
+#Saving plot
+ggsave(
+  filename = "Intra_Cluster.png", 
+  plot = cluster_7_heatmap,
+  path = output_path,
+  width = 8,     
+  height = 6
+)
+```
 
 ## 6 Cross lineage
 
@@ -509,7 +570,11 @@ protein_lineage_bridge <- cross_lineage_best %>%
 print(protein_lineage_bridge)
 ```
 
-### Sankey for top cross lineage
+### 
+
+### Interactive Sankey for Top Cross Lineage
+
+This is interactive. Once html opened, you can hover on the connections to find out how many IP-IP pairs displayed that connection.
 
 ```{r}
 #Ordering of T cell -> Sub_A -> Protein -> Sub_B -> B cell
@@ -534,6 +599,10 @@ links <- bind_rows(l1, l2, l3, l4)
 nodes <- data.frame(name = unique(c(links$source, links$target)))
 nodes$id <- 0:(nrow(nodes)-1)
 
+#Colours
+num_nodes <- nrow(nodes)
+viridis_colors <- viridis::viridis(num_nodes)
+js_array <- paste0('["', paste(viridis_colors, collapse = '", "'), '"]')
 
 #IDs
 links <- links %>%
@@ -541,20 +610,53 @@ links <- links %>%
   left_join(nodes, by = c("target" = "name")) %>% rename(target_id = id)
 
 
-
-
 #Plotting
 ip_sankey <- sankeyNetwork(Links = links, Nodes = nodes, Source = "source_id", Target = "target_id",
               Value = "value", NodeID = "name", units = "Interactions",
-              fontSize = 12, nodeWidth = 30)
+              fontSize = 18, nodeWidth = 30,
+              width = 1200,
+              height = 600
+              )
 
 
-ip_sankey
+#Modification for the colours
+ip_sankey <- htmlwidgets::onRender(
+  ip_sankey,
+  paste0('
+    function(el, x) {
+      var colors = ', js_array, ';
+      d3.select(el).selectAll(".node rect")
+        .style("fill", function(d, i) {return colors[i]; });
+    }
+  ')
+)
 
-saveWidget(ip_sankey,
-           file = output_path, 
-           "IP_IP_Lineage_Sankey.html",
-           selfcontained = TRUE)
+#Format and Title
+sankey_file_path <- file.path(output_path, "Cross_Lineage_Sankey.html")
+
+save_html(
+  tagList(
+    tags$h2("Cross-Lineage Shared Protein Flow", style = "text-align:center; font-family: Arial;"),
+    tags$div(style = "width: 1200px; margin: auto;", ip_sankey)
+  ), 
+  file = sankey_file_path
+)
+
+#HTML version
+browseURL(sankey_file_path)
+
+
+
+#Static Version
+#To obtain static, conduct locally rather than HPC
+webshot(
+  url = sankey_file_path, 
+  file = file.path(output_path, "Cross_Lineage_Sankey_Static.png"),
+  vwidth = 1300, 
+  vheight = 700,
+  delay = 2
+)
+
 ```
 
 # Graphing
@@ -563,95 +665,201 @@ OVERALL GOAL: These top IP-IP pairs, need to compare with which proteins are th
 
 ## Chord Diagram
 
-cell to cell network based on major lineage - cross talk of filtered.
-
-line thickness is the amount of pairs that have that association
-
-colour of line rainbow, continous from each lineage has a colour then when they cross, the colour changes
-
-or heatmap with every ip trait against every ip trait and the amount of proteins shared/ amount of pairs in them
-
-### Both lineages
+### Aggregating the data
 
 ```{r}
-#Using circlize
 #Aggregating the data
 chord_df <- ip_lineage_check %>%
-  group_by(Sub_A, Sub_B, Sup_A, Sup_B, Relationship) %>%
-  summarise(value = sum(weighted), .groups = "drop") #can filter for stronger signals with  filter(value > quantile(value, 0.8)) 
-
-#Relationship 
-chord_df <- chord_df %>%
-  mutate(link_col = if_else(Relationship == "Intra-Lineage", 
-                            "#440154FF",  
-                            "#21908CFF")) 
-#Clearing 
-circos.clear()
-
-nodes <- chord_df %>%
-  select(Sub = Sub_A, Sup = Sup_A) %>%
-  bind_rows(chord_df %>% select(Sub = Sub_B, Sup = Sup_B)) %>%
-  distinct() %>%
-  arrange(Sup, Sub)
-
-#PLOT
-circos.clear()
-circos.par(gap.after = 2, start.degree = 90)
-
-chordDiagram(
-  x = chord_df %>% select(Sub_A, Sub_B, value),
-  order = nodes$Sub,
-  col = chord_df$link_col,          
-  transparency = 0.3,     #Overlapping
-  annotationTrack = "grid", 
-  preAllocateTracks = list(track.height = 0.1)
-)
-
-#Lables
-circos.track(track.index = 1, 
-             panel.fun = function(x, y) {
-  circos.text(CELL_META$xcenter,
-              CELL_META$ylim[1],
-              CELL_META$sector.index, 
-              facing = "clockwise", 
-              niceFacing = TRUE, 
-              adj = c(0, 0.5), 
-              cex = 0.6)
-},
-bg.border = NA)
-
-#Legend
-legend("bottomleft", title = "Weighted Jaccard Score", 
-       legend = c("Low", "High"), 
-       fill = c("#440154FF","#21908CFF"), bty = "n")
-
-circos.clear()
+  #Make sure no redundant pairs
+  mutate(
+    Sub_1 = pmin(Sub_A, Sub_B),
+    Sub_2 = pmax(Sub_A, Sub_B)
+  ) %>%
+  group_by(Sub_1, Sub_2, Sup_A, Sup_B, Relationship) %>%
+  summarise(value = sum(weighted), .groups = "drop")%>% #can filter for stronger signals with  filter(value > quantile(value, 0.8)) 
+  rename(Sub_A = Sub_1, Sub_B = Sub_2)
 ```
 
 ### Intra lineage
 
-all (sub.lineage) and then another diagram to compare to 7+ filtered hub which is all t cells, so will have to use sup.lineage
-
 ```{r}
 
+#Saving plot
+intra_file_name <- file.path(output_path, "Intra_Lineage_chord.png")
+png(intra_file_name, width = 8, height = 8, units = "in", res = 300)
+par(mar = c(0, 0, 0, 0))
 
+#Intra df for chord
+intra_df <- chord_df %>% filter(Relationship == "Intra-Lineage")
+
+#Assigning colours for unique sub lineages
+all_sub_lineages <- sort(unique(c(intra_df$Sub_A, intra_df$Sub_B)))
+sub_colors <- viridis(length(all_sub_lineages), option = "viridis")
+names(sub_colors) <- all_sub_lineages
+
+#Circle parameters
+circos.par(gap.after = 2, 
+           start.degree = 180,
+           canvas.xlim = c(-1.1, 1.1), 
+           canvas.ylim = c(-1.1, 1.1)) 
+
+#Order so lineages are together
+order_circle <- c(
+  "CD4 T cells", "CD8 T cells", "DP T cells", 
+  "Memory CD8 T cells", "Naive CD8 T cells", 
+  "Monocytes", "B cells/A", "B cells/D", 
+  "B cells/E", "B cells/G", "B cells/M"
+)
+
+#Diagram
+chordDiagram(
+  x = intra_df %>% select(Sub_A, Sub_B, value),
+  order = order_circle ,
+  grid.col = sub_colors,
+  transparency = 0.6,
+  annotationTrack = "grid",
+  preAllocateTracks = list(track.height = 0.07)
+)
+
+#Labelling
+circos.track(track.index = 1, panel.fun = function(x, y) 
+  #Every sub lineage labelled
+  {circos.text(CELL_META$xcenter, CELL_META$ylim[1], CELL_META$sector.index, 
+              #Ensure it is readable, not upside down
+              facing = "clockwise", 
+              niceFacing = TRUE, 
+              adj = c(0, 0.5), 
+              cex = 1) # size
+}, bg.border = NA)
+
+#Title 
+title(main = "Intra-Lineage Connections", 
+      cex.main = 1.5, 
+      font = 2,
+      line =-3)
+
+#Save with dev.off
+dev.off()
+#Clear before next use
+circos.clear()
 ```
 
 ### Cross lineage
 
-Only cross lineage pairs \>1 or 2? with jaccard score of 0.75 above?
+This is shared count \>= 3 & jaccard_score = 1
 
 ```{r}
-chord_data <- ip_lineage_check %>%
-  group_by(Sup_A, Sup_B) %>%
-  summarise(total_weight = sum(weighted), .groups = 'drop')
+#Saving plot
+cross_file_name <- file.path(output_path, "Cross_Lineage_chord.png")
+png(cross_file_name, width = 8, height = 8, units = "in", res = 300)
+par(mar = c(0, 0, 0, 0))
 
-# Plot the chord diagram
-chordDiagram(chord_data)
+#Cross df
+cross_chord_df <- cross_lineage_best%>% 
+  group_by(Sub_A, Sub_B) %>% 
+  summarise(value = sum(weighted), .groups = "drop")
+
+#Assigning colours for unique sub lineages
+all_nodes <- sort(unique(c(cross_chord_df$Sub_A, cross_chord_df$Sub_B)))
+cross_colors <- viridis(length(all_nodes), option = "viridis")
+names(cross_colors) <- all_nodes
+
+#Circle parameters
+circos.par(gap.after = 2, 
+           start.degree = 90,
+           canvas.xlim = c(-1.1, 1.1), 
+           canvas.ylim = c(-1.1, 1.1)) 
+
+#Diagram
+chordDiagram(
+  x = cross_chord_df %>% select(Sub_A, Sub_B, value),
+  grid.col = cross_colors,
+  transparency = 0.6,
+  annotationTrack = "grid",
+  preAllocateTracks = list(track.height = 0.07)
+)
+
+#Labelling
+circos.track(track.index = 1, panel.fun = function(x, y) 
+  #Every sub lineage labelled
+  {circos.text(CELL_META$xcenter, CELL_META$ylim[1], CELL_META$sector.index, 
+              #Ensure it is readable, not upside down
+              facing = "clockwise", 
+              niceFacing = TRUE, 
+              adj = c(0, 0.5), 
+              cex = 1) # size
+}, bg.border = NA)
+
+#Title 
+title(main = "Cross-Lineage Connections",
+      cex.main = 1.5, 
+      font = 2,
+      line =-3)
+
+#Save with dev.off
+dev.off()
+#Clear before next use
+circos.clear()
 ```
 
-# IMPROVEMENTS:
+### Paneling the chord plots together
 
--   lineage pairings
+```{r}
 
--   facet by super lineage
+#File path, reading saved images
+img_intra <- readPNG(file.path(output_path, "Intra_Lineage_chord.png"))
+img_cross <- readPNG(file.path(output_path, "Cross_Lineage_chord.png"))
+
+#Convert to graphical object 
+img_intra_plot <- rasterGrob(img_intra)
+img_cross_plot  <- rasterGrob(img_cross)
+
+#wrap ana annotate
+combined_chord <- wrap_elements(img_intra_plot) + wrap_elements(img_cross_plot) +
+  plot_annotation(tag_levels = 'A') & 
+  theme(plot.tag = element_text(size = 30, face = "bold"))
+
+#Saving
+ggsave(
+  filename = "Combined_Chord_Plots.png",
+  plot = combined_chord,
+  path = output_path,
+  width = 16, 
+  height = 8)
+```
+
+### Paneling all graphs from this quarto document
+
+```{r}
+#Function to load the png
+load_png <- function(path) {
+  img <- readPNG(path)
+  rasterGrob(img, interpolate = TRUE)
+}
+
+#Loading the images
+p_row1   <- load_png(file.path(output_path, "IP_IP_Panels_Combined.png"))
+p_intra  <- load_png(file.path(output_path, "Intra_Lineage_chord.png"))
+p_cross  <- load_png(file.path(output_path, "Cross_Lineage_chord.png"))
+p_cluster <- load_png(file.path(output_path, "Intra_Cluster.png"))
+p_sankey  <- load_png(file.path(output_path, "Cross_Lineage_Sankey_Static.png"))
+
+#Combining + annotate
+final_combined <- 
+  wrap_elements(p_row1) / 
+  (wrap_elements(p_intra) + wrap_elements(p_cross)) / 
+  (wrap_elements(p_cluster) + wrap_elements(p_sankey) + plot_layout(widths = c(1.2, 2))) +
+  plot_annotation(tag_levels = list(c("", "C", "D", "E", "F"))) & 
+  theme(plot.tag = element_text(size = 24, face = "bold"))
+
+#Saving
+ggsave(
+  filename = "IP_IP_Multi_Final_Panel.png",
+  plot = final_combined,
+  path = output_path,
+  width = 18,
+  height = 24
+)
+```
+
+# 

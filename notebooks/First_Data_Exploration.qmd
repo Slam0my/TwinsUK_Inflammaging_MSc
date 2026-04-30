@@ -19,6 +19,7 @@ Installing the packages needed
 ```{r, message = FALSE}
 library(ggplot2)# For visual plotting
 library(dplyr) # For dataframe manipulation
+library(patchwork) #Combine Plots
 ```
 
 ### 1.2 Working Directory
@@ -67,7 +68,7 @@ From the dimensions, there are 485 rows, signifying that there are 485 unique in
 
 Understanding the population.
 
-#### 2.3.1 Sex and Zygosity
+#### Sex and Zygosity
 
 ```{r}
 print(table(dataset$SEX)) # Sex
@@ -88,7 +89,7 @@ dataset %>%
 
 11 individuals were tested without their pair. This could be due to factors like consent, schedule...
 
-#### 2.3.2 Age Statistics
+#### Age Statistics
 
 ```{r}
 cat("Mean Age: ", mean(dataset$Age), "\n") #Mean Age
@@ -100,7 +101,7 @@ cat("Median:   ", median(dataset$Age), "\n") #Median
 
 note : Perhaps can do a age plot with mz/dz distribution population pyramid plot..
 
-##### 2.3.2.1 Graphing Age distribution
+##### Graphing Age distribution
 
 ```{r}
 dir.create(output_path, recursive = TRUE, showWarnings = FALSE)
@@ -138,7 +139,7 @@ ggsave(
 )
 ```
 
-##### 2.3.2.2 Remove unpaired twins.
+##### Remove unpaired twins.
 
 ```{r}
 #For downstream analysis, only want complete pair so we need to remove the singletons
@@ -191,14 +192,14 @@ age_zyg_plot<- ggplot(dataset_pairs, aes(x = Age_Bin, fill = Z)) +
 
 #Saving plot
 ggsave(
-  filename = "overall_cohort/Age_Plot_Filtered.png",  
+  filename = "overall_cohort/Age_Plot_Filtered.png",
   path = output_path,
   width = 10,     
   height = 5
 )
 ```
 
-#### 2.3.3 QC Warning
+#### QC Warning
 
 In downstream analysis, we may have to omit those that did not pass the Olink QC (not sure if this is applies to bioinformatics pipeline). But if we remove those individuals, we are left with singleton twins.
 
@@ -212,7 +213,7 @@ dataset %>%
   pull (id)
 ```
 
-##### 2.3.3.1 Final Filtering
+##### Final Filtering
 
 We need to remove those 7 and their twin so 14 individuals.
 
@@ -240,7 +241,7 @@ age_zyg_plot<- ggplot(dataset_clean, aes(x = Age_Bin, fill = Z)) +
                   stat_count(geom = "text", aes(label = after_stat(count)), 
                              position = position_stack(vjust = 0.5), size = 3, color = "black") +
                   labs(
-                    title = "Age and Zygosity Distribution (Final - After QC)",
+                    title = "Age and Zygosity Distribution",
                     x = "Age Group ",
                     y = "Number of Individuals",
                     fill = "Zygosity"
@@ -294,7 +295,7 @@ cat("Oldest:   ", max(dataset_final$Age[dataset_final$Z == "DZ"]), "\n") #Oldest
 cat("Median:   ", median(dataset_final$Age[dataset_final$Z == "DZ"]), "\n") #Median
 ```
 
-#### 2.3.4 BMI checks
+#### BMI checks
 
 ```{r}
 cat("Mean BMI: ", mean(dataset_final$BMI), "\n") #Mean Age
@@ -330,7 +331,7 @@ BMI_data <- dataset_final %>%
   mutate(Group = factor(Group, levels = c("Total", "DZ", "MZ")))
 
 #Graph
-ggplot(BMI_data, 
+bmi_plot<- ggplot(BMI_data, 
        aes(x = BMI, fill = Group, color = Group)) + #Fill
         geom_density(alpha = 0.2)+ #Line thickness
         geom_density(aes(color = Group), alpha = 0, linewidth = 0.8) + #Adding mean lines
@@ -369,6 +370,29 @@ ggsave(
 Note: Check if twins got tested on different plates/times.
 
 What about the season covariate? is it evenly distributed? if there were more twins measured in winter/summer how might allergies or seasonal immune boost affect it?
+
+#### Joining Graph
+
+```{r}
+overall_age_bmi<- (age_zyg_plot+ bmi_plot)+ 
+  plot_annotation(
+    title = "Overall Cohort Age and BMI Distribution",
+    tag_levels = 'A') &
+  theme(
+    plot.title = element_text(size = 18, face = "bold", hjust = 0.5),
+    plot.tag = element_text(size = 20, face = "bold")
+  )
+
+
+ggsave(
+  filename = "overall_cohort/Age_BMI.png", 
+  plot = overall_age_bmi,
+  path = output_path,
+  width = 16,     
+  height = 8
+)
+
+```
 
 ## 3. 'Olink_associations.RData' Exploration
 

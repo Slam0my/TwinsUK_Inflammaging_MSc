@@ -5,6 +5,8 @@ software/
 raw_olink_ip/
 results/
 solar_chunks/
+visualisations/ip_ip/Cross_Lineage_Sankey.html
+visualisations/ip_ip/lib/
 
 # --- Ignore R/Project Artifacts ---
 *.RData
