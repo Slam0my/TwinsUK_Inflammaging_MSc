@@ -229,7 +229,6 @@ dataset_final<- dataset_paired %>%
 Graphing the qc filtered age distribution
 
 ```{r}
-
 #setting the age group distribution 
 dataset_clean <- dataset_final %>%
   mutate(Age_Bin = cut(Age, breaks = seq(40, 80, by = 5),labels = c("40-44", "45-49", "50-54", "55-59", "60-64", "65-69", "70-74", "75-79"), right = FALSE))
@@ -249,7 +248,7 @@ age_zyg_plot<- ggplot(dataset_clean, aes(x = Age_Bin, fill = Z)) +
                   scale_fill_manual(values = c("DZ" = "#D1C4E9", "MZ" = "#745A92")) +
                   theme_minimal() +
                   theme(
-                    plot.title = element_text(hjust = 0.5, face = "bold"),
+                    plot.title = element_text(hjust = 0.5, face = "bold", size =14),
                     panel.grid = element_blank(), #remove grid lines
                     axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1)
                   )
@@ -376,13 +375,11 @@ What about the season covariate? is it evenly distributed? if there were more tw
 ```{r}
 overall_age_bmi<- (age_zyg_plot+ bmi_plot)+ 
   plot_annotation(
-    title = "Overall Cohort Age and BMI Distribution",
     tag_levels = 'A') &
   theme(
     plot.title = element_text(size = 18, face = "bold", hjust = 0.5),
     plot.tag = element_text(size = 20, face = "bold")
   )
-
 
 ggsave(
   filename = "overall_cohort/Age_BMI.png", 
@@ -393,6 +390,8 @@ ggsave(
 )
 
 ```
+
+#### Table for summary age and bmi stats
 
 ## 3. 'Olink_associations.RData' Exploration
 

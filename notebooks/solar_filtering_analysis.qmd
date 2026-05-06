@@ -33,7 +33,6 @@ library(igraph)
 library(ggraph)
 library(tidygraph)
 library(ggforce) #Circular network modules
-
 ```
 
 ### 1.2 Loading Data
@@ -179,6 +178,7 @@ To validate the total correlations observed between IP-protein associations.
 ```{r}
 rhoP_plot<- ggplot(sum_results_combined, aes(x = rhoP)) +
   geom_histogram(bins = 50, fill = "#440154FF", color = "white") +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "red", linewidth = 1) +
   #Labels
   labs(title = "Distribution of Phenotypic Correlations (ρP)",
        x = "Phenotypic Correlation (ρP)",
@@ -190,12 +190,14 @@ rhoP_plot<- ggplot(sum_results_combined, aes(x = rhoP)) +
     axis.title.y = element_text(size = 12,face = "bold"),
     axis.text.x = element_text(size = 10),
     axis.title.x = element_text(size = 12,face = "bold"),
-    plot.title = element_text(size = 14, face = "bold",hjust = 0.5, margin = margin(b = 10)),
+    plot.title = element_text(size = 16, face = "bold",hjust = 0.5, margin = margin(b = 10)),
     plot.title.position = "plot",
     legend.position = "none",
     axis.line = element_line(color = "black"),
     panel.grid.major.y = element_blank() #No vertical lines
   )
+
+
 
 #Saving plot
 ggsave(
@@ -254,7 +256,7 @@ ip_per_protein %>%
     axis.title.y = element_text(size = 10),
     axis.text.x = element_text(size = 6),
     axis.title.x = element_text(size = 10),
-    plot.title = element_text(size = 12, face = "bold",hjust = 0.5),
+    plot.title = element_text(size = 16, face = "bold",hjust = 0.5),
     legend.position = "none",
     panel.grid.major.y = element_blank() #No vertical lines
   )
@@ -301,7 +303,7 @@ top_15_proteins <- ip_per_protein %>%
     axis.title.y = element_text(size = 12,face = "bold"),
     axis.text.x = element_text(size = 10),
     axis.title.x = element_text(size = 12,face = "bold"),
-    plot.title = element_text(size = 14, face = "bold",hjust = 0.5, margin = margin(b = 10)),
+    plot.title = element_text(size = 16, face = "bold",hjust = 0.5, margin = margin(b = 10)),
     legend.position = "none",
     axis.line = element_line(color = "black"),
     panel.grid.major.y = element_blank() #No vertical lines
@@ -364,7 +366,7 @@ ip_shared_prot_plot <- ggplot(ip_shared_prot_df, aes(x = Num_Proteins, y = Count
     axis.title.y = element_text(size = 10,face = "bold"),
     axis.text.x = element_text(size = 8),
     axis.title.x = element_text(size = 10,face = "bold"),
-    plot.title = element_text(size = 12, face = "bold",hjust = 0.5, margin = margin(b = 10)),
+    plot.title = element_text(size = 16, face = "bold",hjust = 0.5, margin = margin(b = 10)),
     legend.position = "none",
     axis.line = element_line(color = "black"),
     panel.grid.major.y = element_blank() #No vertical lines
@@ -396,11 +398,12 @@ overall_ip_prot_dis_panels <- (rhoP_plot)/
   overall_ip_prot_dis_panels<- rhoP_plot +top_15_proteins+ip_shared_prot_plot +plot_layout(design = spacer)+
   
 plot_annotation(
-    title = "Overall IP-Protein Distribution in the Total Cohort ",
     tag_levels = 'A') &
   theme(
-    plot.title = element_text(size = 18, face = "bold", hjust = 0.5),
-    plot.tag = element_text(size = 20, face = "bold") 
+    plot.tag = element_text(size = 25, face = "bold") ,
+    plot.title = element_text(size = 28, face = "bold", hjust = 0.5),
+    axis.title = element_text(size = 25, face = "bold"),
+    axis.text = element_text(size = 18)
   )
 
 print (overall_ip_prot_dis_panels)
@@ -409,8 +412,8 @@ ggsave(
   filename = "overall_cohort/Overall_IP_Prot_Final_Panel.png",
   plot = overall_ip_prot_dis_panels,
   path = output_path,
-  width = 20,
-  height = 16
+  width = 24,
+  height = 20
 )
 ```
 
@@ -578,11 +581,10 @@ ggsave(
 #Using Patchwork
 comb_overall_rho <- (rho_dis_overall / indiv_lin_rho_dis ) + 
   plot_annotation(
-    title = "IP-Protein Correlation Landscape",
     tag_levels = 'A') &
   theme(
-    plot.title = element_text(size = 18, face = "bold", hjust = 0.5),
-    plot.tag = element_text(size = 20, face = "bold")
+    plot.title = element_text(size = 25, face = "bold", hjust = 0.5),
+    plot.tag = element_text(size = 25, face = "bold")
   )
 
 print(comb_overall_rho)
@@ -671,6 +673,23 @@ genetic_0.1_hits %>%
     unique_IPs = n_distinct(trait1),
     unique_proteins = n_distinct(trait2)
   )
+```
+
+```{r}
+genetic_0.1_hits  %>%
+  summarise (
+    mean_h2r1 = mean(h2r1),
+    sd_h2r1   = sd(h2r1),
+    max_h2r1 = max(h2r1),
+    mean_h2r2 = mean(h2r2),
+    sd_h2r2= sd(h2r2),
+    max_h2r2 = max(h2r2),
+    mean_rhoG = mean(abs(rhoG)),
+    sd_rhoG= sd(abs(rhoG)),
+    mean_rhoE = mean(abs(rhoE)),
+    sd_rhoE= sd(abs(rhoE))
+  )
+
 ```
 
 ### 6.2 Protein Distribution
@@ -792,6 +811,7 @@ gen_hub_9_prot <- genetic_0.1_hits %>%
 #Convert to df
 gen_hub_9_prot_df <- genetic_0.1_hits %>%
   filter(trait1 %in% gen_hub_9_prot)
+
 ```
 
 ```{r}
@@ -812,6 +832,20 @@ gen_hub_9_prot_df %>%
 ```
 
 All share the same proteins.
+
+```{r}
+#Heritability values
+gen_hub_9_prot_df %>%
+  summarise(
+    avg_h2_IP = mean(h2r1),
+    sd_h2_IP = sd(h2r1),
+    avg_h2_Protein = mean(h2r2),
+    sd_h2_Protein = sd(h2r2),
+    avg_rhoG = mean(rhoG),
+    sd_rhoG = sd(rhoG)
+    
+  )
+```
 
 #### Investigating 8 Protein Hub
 
@@ -904,6 +938,8 @@ gen_bidirection <- ggplot(gen_bidirection_counts, aes(x = Direction, y = n, fill
       strip.text = element_text(face = "bold"),
       axis.title.y = element_text(size = 12,face = "bold"),
       axis.title.x = element_text(size = 12,face = "bold"),
+      panel.grid.major = element_blank(),
+      panel.grid.minor = element_blank()
     ) +
   labs(title = "Directionality by Lineage",
        y = "Number of Significant Genetic Hits")
@@ -954,21 +990,20 @@ gen_panels <- gen_bidirection + gen_top15_prot + ip_shared_prot_plot_gen +
   
   plot_layout(design = spacer) +
   
-  plot_annotation(
-    title = "Genetically Significant IP-Protein Overview",
+  plot_annotation(  
     tag_levels = 'A'
   ) &
   theme(
-    plot.title = element_text(size = 24, face = "bold", hjust = 0.5),
+    plot.title = element_text(size = 20, face = "bold", hjust = 0.5),
     plot.tag.position = c(0.08, 0.99),
-    plot.tag = element_text(size = 24, face = "bold"))
+    plot.tag = element_text(size = 18, face = "bold"))
 
 ggsave(
   filename = "genetic_hits/Genetic_Panels.png",
   plot = gen_panels,
   path = output_path,
   width = 20,
-  height = 16
+  height = 18
 )
 ```
 
@@ -994,6 +1029,7 @@ hub_data_gen <- genetic_0.1_hits %>%
 
 ```{r}
 #Graphing
+
 #Building the node lists 
 hub_nodes_gen <- data.frame(
   name = unique(c(hub_data_gen$trait1, hub_data_gen$trait2))) %>%
@@ -1019,17 +1055,22 @@ hub_nodes_gen$colour_group <- factor(
                                         sort(unique(
                                           hub_nodes_gen$colour_group[
                                             hub_nodes_gen$colour_group != "Protein"]))))
+
 #Unique 
 unique_conn_gen <- sort(unique(hub_nodes_gen$colour_group[hub_nodes_gen$colour_group != "Protein"]))
+
 #Final colours for each + black for protein
 final_colors_gen <- c("Protein" = "black", setNames(viridis_pal(option = "viridis")(length(unique_conn_gen)), unique_conn_gen))
 
 #Shape for aesthetics
 unique_lineages_gen <- sort(unique(hub_nodes_gen$shape_map))
+
 #start at shape 15 square
 shape_sequence_gen <- seq(from = 15, length.out = length(unique_lineages_gen)) 
+
 #Lineage values for ggraph input
 lineage_vals_gen <- setNames(shape_sequence_gen, unique_lineages_gen)
+
 
 #Graph for visuals
 ggraph(hub_graph_gen, layout = "fr") +
@@ -1143,6 +1184,22 @@ environmental_hits %>%
     unique_proteins = n_distinct(trait2)
   )
 
+```
+
+```{r}
+environmental_hits %>%
+  summarise (
+    mean_h2r1 = mean(h2r1),
+    sd_h2r1   = sd(h2r1),
+    max_h2r1 = max(h2r1),
+    mean_h2r2 = mean(h2r2),
+    sd_h2r2= sd(h2r2),
+    max_h2r2 = max(h2r2),
+    mean_rhoG = mean(abs(rhoG)),
+    sd_rhoG= sd(abs(rhoG)),
+    mean_rhoE = mean(abs(rhoE)),
+    sd_rhoE= sd(abs(rhoE))
+  )
 ```
 
 ### 7.2 Protein Distribution
@@ -1273,8 +1330,21 @@ environmental_hits  %>%
 ```{r}
 #overall count 
 environmental_hits %>%   
-  mutate(Direction = if_else(rhoG < 0, "Negative (-)", "Positive (+)")) %>%   
+  mutate(Direction = if_else(rhoE < 0, "Negative (-)", "Positive (+)")) %>%   
   count(Direction)
+```
+
+Obtaining the mean rhoG for both directions
+
+```{r}
+environmental_hits %>%
+  mutate(direction = ifelse(rhoE > 0, "Positive", "Negative")) %>%
+  group_by(direction) %>%
+  summarise(
+    count = n(),
+    mean_rhoE = mean(rhoE, na.rm = TRUE),
+    sd_rhoE = sd(rhoE, na.rm = TRUE)
+  )
 ```
 
 #### Per Lineage
@@ -1282,7 +1352,7 @@ environmental_hits %>%
 ```{r}
 #count per lineage 
 env_bidirection_counts <- environmental_hits %>%   
-  mutate(Direction = if_else(rhoG < 0, "Negative (-)", "Positive (+)")) %>%   
+  mutate(Direction = if_else(rhoE < 0, "Negative (-)", "Positive (+)")) %>%   
   count(Direction, Sup.Lineage)  
 
 print(env_bidirection_counts)
@@ -1312,6 +1382,8 @@ env_bidirection<- ggplot(env_bidirection_counts,
     strip.text = element_text(face = "bold"),       
     axis.title.y = element_text(size = 12,face = "bold"),      
     axis.title.x = element_text(size = 12,face = "bold"),   
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank()
     ) +   
   labs(title = "Directionality by Lineage",        
        y = "Number of Significant Genetic Hits")   
@@ -1326,7 +1398,7 @@ ggsave(
   height = 8 )
 ```
 
-### paneling
+### Paneling
 
 ```{r}
 
@@ -1335,23 +1407,24 @@ env_panels <-  (env_bidirection) /(env_top15_prot + ip_shared_prot_plot_env)+
 
 env_panels <- env_bidirection + env_top15_prot + ip_shared_prot_plot_env +
   
-  plot_layout(design = spacer) +
   
-  plot_annotation(
-    title = "Environmentally Significant IP-Protein Overview",
+   plot_layout(design = spacer) +
+  
+  plot_annotation(  
     tag_levels = 'A'
   ) &
   theme(
-    plot.title = element_text(size = 24, face = "bold", hjust = 0.5),
+    plot.title = element_text(size = 20, face = "bold", hjust = 0.5),
     plot.tag.position = c(0.08, 0.99),
-    plot.tag = element_text(size = 24, face = "bold"))
+    plot.tag = element_text(size = 18, face = "bold"))
+
 
 ggsave(
   filename = "environmental_hits/Environmental_Panels.png",
   plot = env_panels,
   path = output_path,
   width = 20,
-  height = 16
+  height = 18
 )
 ```
 
@@ -1390,23 +1463,38 @@ hub_nodes_env <- data.frame(
   left_join(lineage_info_env, by = c("name" = "trait1")) %>%   
   mutate(shape_map = ifelse(type == "Protein", "Protein", Sub.Lineage))  
 
+#Number of unique lineages 
+unique(hub_nodes_env$shape_map)
+```
+
+```{r}
 #Network Graph  
 #Combining the edges and nodes 
 hub_graph_env <- graph_from_data_frame(hub_data_env %>% 
                                          select(trait1, trait2), directed = FALSE, vertices = hub_nodes_env)  
+
 #Assigning colours to them  
-#Need automated colour and shapes for IPs but keep protein the same  
+#Need automated colour and shapes for IPs but keep protein the same
 hub_nodes_env$colour_group <- factor(hub_nodes_env$colour_group,levels = c("Protein", sort(unique(hub_nodes_env$colour_group[hub_nodes_env$colour_group != "Protein"])))) 
+
 #Unique  
 unique_conn_env <- sort(unique(hub_nodes_env$colour_group[hub_nodes_env$colour_group != "Protein"])) 
+
 #Final colours for each + black for protein 
 final_colors_env <- c("Protein" = "black", setNames(viridis_pal(option = "viridis")(length(unique_conn_env)), unique_conn_env)) 
+
 #Shape for aesthetics 
-unique_lineages_env <- sort(unique(hub_nodes_env$shape_map)) 
-#start at shape 15 square 
-shape_sequence_env <- seq(from = 15, length.out = length(unique_lineages_env))  
-#Lineage values for ggraph input 
-lineage_vals_env <- setNames(shape_sequence_env, unique_lineages_env) 
+lineage_vals_env <- c(
+  "Protein"                = 17, #Triangle
+  "CD8 T cells"            = 15, #Square
+  "Monocytes"              = 16, #Circle
+  "14-/11c+ (nodim)/1c+"   = 8,  #Star
+  "14-/mDC/1c+"            = 25, #Inverted triangle
+  "B cells/D"              = 18  #Diamond
+)
+
+
+
 #Graph for visuals 
 ggraph(hub_graph_env, layout = "fr") +   
   #Arc Edges for visuals   
@@ -1520,7 +1608,11 @@ both_hits %>%
     max_h2r1 = max(h2r1),
     mean_h2r2 = mean(h2r2),
     sd_h2r2= sd(h2r2),
-    max_h2r2 = max(h2r2)
+    max_h2r2 = max(h2r2),
+    mean_rhoG = mean(abs(rhoG)),
+    sd_rhoG= sd(abs(rhoG)),
+    mean_rhoE = mean(abs(rhoE)),
+    sd_rhoE= sd(abs(rhoE))
   )
 ```
 
@@ -1599,7 +1691,9 @@ ggplot(both_dual, aes(x = reorder(IP, abs(rhoG)))) +
     axis.title = element_text(size = 11, face = "bold"),
     axis.text.x = element_text(size = 11),
     axis.text.y = element_text(size = 9),
-    axis.line = element_line(color = "black"))
+    axis.line = element_line(color = "black"),
+    panel.grid.major = element_blank(), 
+    panel.grid.minor = element_blank())
 
 
 #Saving plot
@@ -1633,6 +1727,24 @@ gen_env_0.1 %>%
     unique_IPs = n_distinct(trait1),
     unique_proteins = n_distinct(trait2)
   )
+```
+
+```{r}
+gen_env_0.1 %>%
+  summarise (
+    mean_h2r1 = mean(h2r1),
+    sd_h2r1   = sd(h2r1),
+    max_h2r1 = max(h2r1),
+    mean_h2r2 = mean(h2r2),
+    sd_h2r2= sd(h2r2),
+    max_h2r2 = max(h2r2),
+    mean_rhoG = mean(abs(rhoG)),
+    sd_rhoG= sd(abs(rhoG)),
+    mean_rhoE = mean(abs(rhoE)),
+    sd_rhoE= sd(abs(rhoE))
+    
+  )
+
 ```
 
 ### 9.2 Protein Distribution
@@ -1745,7 +1857,9 @@ ggplot(gen_env_0.1_data, aes(x = trait2, fill = Sub.Lineage)) +
     strip.background = element_rect(fill = "white"),        
     strip.text = element_text(face = "bold"),       
     axis.title.y = element_text(size = 12,face = "bold"),      
-    axis.title.x = element_text(size = 12,face = "bold"),     
+    axis.title.x = element_text(size = 12,face = "bold"),
+      panel.grid.major = element_blank(), 
+    panel.grid.minor = element_blank()
     ) +   
   scale_fill_viridis_d()
 
@@ -1830,6 +1944,22 @@ env_gen %>%
   )
 ```
 
+```{r}
+env_gen  %>%
+  summarise (
+    mean_h2r1 = mean(h2r1),
+    sd_h2r1   = sd(h2r1),
+    max_h2r1 = max(h2r1),
+    mean_h2r2 = mean(h2r2),
+    sd_h2r2= sd(h2r2),
+    max_h2r2 = max(h2r2),
+    mean_rhoG = mean(abs(rhoG)),
+    sd_rhoG= sd(abs(rhoG)),
+    mean_rhoE = mean(abs(rhoE)),
+    sd_rhoE= sd(abs(rhoE))
+  )
+```
+
 ### 10.2 Protein Distribution
 
 ```{r}
@@ -1883,21 +2013,21 @@ env_gen %>%
 
 ```{r}
 env_gen %>%   
-  mutate(Direction = if_else(rhoG < 0, "Negative (-)", "Positive (+)")) %>%   
+  mutate(Direction = if_else(rhoE < 0, "Negative (-)", "Positive (+)")) %>%   
   count(Direction)
 ```
 
 ```{r}
 #count per lineage  
 env_gen %>%      
-  mutate(Direction = if_else(rhoG < 0, "Negative (-)", "Positive (+)")) %>%    
+  mutate(Direction = if_else(rhoE < 0, "Negative (-)", "Positive (+)")) %>%    
   count(Direction, Sup.Lineage, trait2)   
 ```
 
 ### 10.6 Summary Graph
 
 ```{r}
-#Add in direction 
+#All positive
 env_gen_data <- ggplot(env_gen, aes(x = trait2, fill = Sub.Lineage)) + 
   geom_bar(position = "stack", alpha = 0.8) +
   #Label   
@@ -1923,7 +2053,9 @@ env_gen_data <- ggplot(env_gen, aes(x = trait2, fill = Sub.Lineage)) +
     strip.background = element_rect(fill = "white"),             
     strip.text = element_text(face = "bold"),            
     axis.title.y = element_text(size = 12,face = "bold"),       
-    axis.title.x = element_text(size = 12,face = "bold"),          
+    axis.title.x = element_text(size = 12,face = "bold"),    
+      panel.grid.major = element_blank(), 
+    panel.grid.minor = element_blank()
     ) +      
   scale_fill_manual(values = c("#440154FF", "#21908CFF"))
 

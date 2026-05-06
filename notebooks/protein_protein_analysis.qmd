@@ -81,9 +81,53 @@ Saving to be loaded elsewhere.
 save.image(file = "prot_prot_filtering_results.RData")
 ```
 
-## 4. Graphing
+## 4. Investigations
 
-#### 4.1 Network Graphs
+```{r}
+prot_gen_0.1_hits  %>%
+  summarise (
+    mean_h2r1 = mean(h2r1),
+    sd_h2r1   = sd(h2r1),
+    max_h2r1 = max(h2r1),
+    mean_h2r2 = mean(h2r2),
+    sd_h2r2= sd(h2r2),
+    max_h2r2 = max(h2r2),
+    mean_rhoG = mean(abs(rhoG)),
+    sd_rhoG= sd(abs(rhoG)),
+    mean_rhoE = mean(abs(rhoE)),
+    sd_rhoE= sd(abs(rhoE))
+  )
+
+```
+
+Obtaining heritability of proteins overall. As proteins are in both trait columns, there is a need to create a new df.
+
+```{r}
+#Combining all unique proteins
+unique_heritability <- prot_gen_0.1_hits %>%
+  select(trait1, h2r1) %>%
+  rename(protein = trait1, h2 = h2r1) %>%
+  bind_rows(
+    prot_gen_0.1_hits %>% 
+    select(trait2, h2r2) %>% 
+    rename(protein = trait2, h2 = h2r2)
+  ) %>%
+  distinct(protein, .keep_all = TRUE) #Duplicate removal
+
+#Calculating stats
+final_h2_summary <- unique_heritability %>%
+  summarise(
+    mean_h2 = mean(h2),
+    sd_h2 = sd(h2),
+    max_h2 = max(h2)
+  )
+
+final_h2_summary
+```
+
+## 5. Graphing
+
+#### 5.1 Network Graphs
 
 PPI network. Relationship between proteins. Identify clusters/modules and key proteins.
 
@@ -146,7 +190,7 @@ scale_edge_colour_gradient(low = "black", high = "grey80") +
    legend.text = element_text(size = 6),
    legend.title = element_text(size = 8, face = "bold"))+
   labs(title = "Protein-Protein Genetic Correlation Network",
-       subtitle = "Based on SOLAR analysis results (H²r > 0.1)",
+       subtitle = "Based on SOLAR analysis results (H² > 0.1)",
        edge_color = "rhoG",
        color = "Module") +
   guides(edge_width = "none")
@@ -189,36 +233,34 @@ ggraph(tg_prot, layout = "fr") +
   geom_edge_link(aes(width = weight, 
                      linetype = ifelse(rhoG < 0, "Negative", "Positive")), 
                  edge_colour = "grey50", 
-                 alpha = 0.7) +
+                 alpha = 0.8) +
   #Negative and positive different line types 
   scale_edge_linetype_manual(values = c("Negative" = "dashed", "Positive" = "solid"),
                              name = "Correlation Type") +
   #Thickness of line is strength 
-  scale_edge_width(range = c(0.5, 4), name = "ρG Correlation Strength") +
+  scale_edge_width(range = c(1, 5), name = "ρG Correlation Strength") +
   #nodes
-  geom_node_point(aes(size = Centrality), color = "grey10", alpha = 0.8) +
+  geom_node_point(aes(size = Centrality), color = "grey20", alpha = 0.9) +
   
   #Aesthetics
   scale_fill_viridis_d(name = "Module Group") +
   
   #Label
-  geom_node_text(aes(label = name), repel = TRUE, size = 2, fontface = "bold",force = 2,point.padding = unit(0.3, "lines"),max.overlaps = Inf) +
+  geom_node_text(aes(label = name), repel = TRUE, size = 3, fontface = "bold",force = 2,point.padding = unit(0.3, "lines"),max.overlaps = Inf) +
   
   theme_void() +
     theme(
    plot.background = element_rect(fill = "white", color = NA),
    panel.background = element_rect(fill = "white", color = NA),
-   plot.title = element_text(hjust = 0.5,face = "bold", size = 14),
-   plot.subtitle = element_text(hjust = 0.5, size = 11),
+   plot.title = element_text(hjust = 0.5,face = "bold", size = 16),
    #space for legend
    plot.margin = margin(t = 10, r = 10, b = 10, l = 10, unit = "pt"),
    legend.position = "right",
    legend.box = "vertical",
-   legend.text = element_text(size = 7),
-   legend.title = element_text(size = 9, face = "bold"))+
+   legend.text = element_text(size = 10),
+   legend.title = element_text(size = 12, face = "bold"))+
   labs(
     title = "Protein-Protein Genetic Correlation Network",
-    subtitle = "Based on SOLAR analysis results (H²r > 0.1)",
     #edge_colour = "Genetic Strength (ρG)",
     color = "Module Group",
     size = "Centrality"
@@ -229,8 +271,8 @@ ggraph(tg_prot, layout = "fr") +
 ggsave(
   filename = "Prot_Circ_Network_Graph.png", 
   path = output_path,
-  width = 10,     
-  height = 6
+  width = 14,     
+  height = 8
 )
 
 ```
@@ -238,97 +280,3 @@ ggsave(
 Size of points = centrality so module 5 appears to have the largest hub/connection in the network followed by module 4. Though module 1 contains CXCL10 and CXCL9 but they don't have as many connections.
 
 If I make this interactive, can adjust the filtering of rhoG \>0.5 but will risk overcrowded visualisations.
-
-# Pearsons
-
-If i was to do pearsons....
-
-This is based on sharing IPS, not from a separate solar analysis.
-
-```{r}
-#Loading in the solar results analysis filtering.
-load("~/Twins_Project/scripts/solar_analysis/solar_analysis_filtering_results.RData")
-
-```
-
-## Matrix
-
-Conversion of the genetic_0.1_hits is necessary from a long to wide format with rows as IPs, columns as proteins and entries as RhoG (pG) . There will be lots of NAs as the majority of IPs do not significnatly associate with 2+ proteins.
-
-Problem is that not all IPs share multiple proteins, 1464 IPs are unique to one protein but the rest (2836) are significantly correlated to 2+ proteins.
-
-```{r}
-#Matrix conversion from genetic_0.1_hits
-#Using RhoG for the biological connection / proximity as it is already filtered
-#Based on shared proteins
-g01_long <- genetic_0.1_hits %>%
-  select(trait1, trait2, rhoG)%>%
-  mutate(
-    IP = if_else(grepl("^IMMUNO_",trait1), trait1, trait2),
-    protein = if_else(grepl("^IMMUNO_", trait1), trait2, trait1)
-  ) %>%
-  filter(grepl("^IMMUNO_", IP)) %>% 
-  select(IP, protein, rhoG)
-
-IP_protein_mat <- g01_long %>%
-  pivot_wider(
-    names_from  = protein,
-    values_from = rhoG
-  ) %>%
-  column_to_rownames("IP") %>%
-  as.matrix()
-
-#number of non-NA proteins per IP
-n_proteins_per_IP <- rowSums(!is.na(IP_protein_mat))
-
-#Filter IPs that have 2+ protein associations, the rest are unique to one protein
-#Filtering for 2+ proteins allows us to identify master regulations and identify where one instigator IP controls multiple responder proteins
-min_proteins <- 2
-keep_IPs <- names(n_proteins_per_IP)[n_proteins_per_IP >= min_proteins]
-
-IP_protein_mat_filt <- IP_protein_mat[keep_IPs,]
-```
-
-## Pearsons
-
-```{r}
-protein_protein_cor <- cor(IP_protein_mat_filt ,
-                           use = "pairwise.complete.obs",
-                           method = "pearson")
-dim(protein_protein_cor)
-
-```
-
-## Network graph
-
-```{r}
-protein_edges <- protein_protein_cor %>%
-  as.data.frame() %>%
-  rownames_to_column("protein1") %>%
-  pivot_longer(-protein1, names_to = "protein2", values_to = "cor") %>%
-  filter(protein1 < protein2,  cor > 0.25, !is.na(cor))
-
-g_prot <- graph_from_data_frame(protein_edges, directed = FALSE)
-
-#Modules
-cl_prot <- cluster_louvain(g_prot, weights = protein_edges$cor)
-
-#Tidygraph
-tg_prot <- tbl_graph(
-  nodes = data.frame(
-    name=V(g_prot)$name, 
-    module=membership(cl_prot)),
-  edges = protein_edges %>% rename(weight = cor), 
-  directed=FALSE)%>%
-  mutate(importance = centrality_degree())
-
-#Plotting with ggraph
-ggraph(tg_prot, layout="fr") +
- geom_edge_link(aes(width=log(weight + 1)), color = "grey80", alpha=0.5) +
-  geom_node_point(aes(color=factor(module), size = importance), alpha = 0.8) +
-  scale_color_viridis_d(option = "viridis") + 
-  scale_size_continuous(range = c(2, 7)) +
-  geom_node_text(aes(label=name), repel=TRUE, size=2) +
-  theme_void() +
-  labs(title="Protein Genetic Similarity Modules")
-```
