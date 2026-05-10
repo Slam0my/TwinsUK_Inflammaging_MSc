@@ -33,6 +33,9 @@ library(igraph)
 library(ggraph)
 library(tidygraph)
 library(ggforce) #Circular network modules
+
+#install.packages("visNetwork")
+library(visNetwork) #interactive network
 ```
 
 ### 1.2 Loading Data
@@ -1007,7 +1010,7 @@ ggsave(
 )
 ```
 
-### 6.2 Network graph with the Hubs
+### 6.6 Hubs Network Graph
 
 To visualise hubs and IP - Protein connections, can filter how many hubs we want in the network graph.
 
@@ -1060,7 +1063,7 @@ hub_nodes_gen$colour_group <- factor(
 unique_conn_gen <- sort(unique(hub_nodes_gen$colour_group[hub_nodes_gen$colour_group != "Protein"]))
 
 #Final colours for each + black for protein
-final_colors_gen <- c("Protein" = "black", setNames(viridis_pal(option = "viridis")(length(unique_conn_gen)), unique_conn_gen))
+final_colours_gen <- c("Protein" = "black", setNames(viridis_pal(option = "viridis")(length(unique_conn_gen)), unique_conn_gen))
 
 #Shape for aesthetics
 unique_lineages_gen <- sort(unique(hub_nodes_gen$shape_map))
@@ -1090,7 +1093,7 @@ ggraph(hub_graph_gen, layout = "fr") +
                  box.padding = 0.4,
                  point.padding = 0.4)+
   #Colours
-  scale_color_manual(values = final_colors_gen,breaks = unique_conn_gen
+  scale_color_manual(values = final_colours_gen,breaks = unique_conn_gen
   ) + 
   #Size based on hub
   scale_shape_manual(values = lineage_vals_gen) +
@@ -1107,7 +1110,7 @@ ggraph(hub_graph_gen, layout = "fr") +
      legend.box = "vertical",
      legend.text = element_text(size = 10),
    legend.title = element_text(size = 10, face = "bold"))+
-  labs(title = "Network of Genetically Significant Hubs",   
+  labs(title = "Network of Genetically Significant Hubs",
        color = "IP Hub Connectivity",
       shape = "Lineages by Shape") +
   guides(edge_width = "none")
@@ -1121,53 +1124,150 @@ ggsave(
 )
 ```
 
-### 6.3 Heatmap
+### 6.7 Static IP-Protein Pairs Network Graph
+
+Filtered for \|rhoG\| at a threshold and IPs connected to 2 + proteins.
 
 ```{r}
-genetic_matrix <- conv_matrix(genetic_0.1_hits, "rhoG")
+#Lookup data 
+lineage_info_gen <- genetic_0.1_hits %>%
+  select(trait1, Sub.Lineage) %>%
+  distinct(trait1, .keep_all = TRUE)
 
-#Lineage
-ip_names <- colnames(t(genetic_matrix))
+#FILTERING
+hub_data_gen <- genetic_0.1_hits %>%
+  filter(abs(rhoG) >= 0.3) %>% 
+  group_by(trait1) %>%
+  filter(n() >= 2) %>% 
+  mutate(n_count = n()) %>%
+  ungroup() %>%
+  mutate(
+    abs_rhoG = abs(rhoG),
+    edge_sign = ifelse(rhoG >= 0, "Positive", "Negative") #For connection 
+  )
 
-anno_col <- genetic_0.1_hits %>%
-  select(trait1, Lineage) %>%
-  distinct() %>%
-  filter(trait1 %in% ip_names) %>%
-  column_to_rownames("trait1")
+#Node List
+hub_nodes_gen <- data.frame(
+  name = unique(c(hub_data_gen$trait1, hub_data_gen$trait2))
+) %>%
+  #Defining proteins from IPs
+  left_join(lineage_info_gen, by = c("name" = "trait1")) %>%
+  mutate(
+    type = ifelse(name %in% lineage_info_gen$trait1, "IP", "Protein"),
+    shape_map = ifelse(type == "Protein", "Protein", Sub.Lineage)
+  )
 
-lineage_split <- anno_col$Lineage
 
-col_fun = colorRamp2(c(-0.6, 0, 0.6), 
-                     c("#440154FF", "#e8e8e8", "#21908CFF"))
+#Edges
+edge_data <- hub_data_gen %>% select(trait1, trait2, rhoG, abs_rhoG, edge_sign)
 
-#Graph
-genetic_heatmap<-  Heatmap(t(genetic_matrix), 
-          name = "ρG", 
-          col = col_fun,
-          column_split = lineage_split,
-          column_title_side = "bottom",
-          column_title_gp = gpar(fontsize = 8, fontface = "bold"),
-          column_title_rot = 90,
-          cluster_rows = TRUE,
-          cluster_columns = TRUE,
-          show_column_dend = FALSE,
-          show_column_names = FALSE,
-          show_row_names = TRUE,
-          row_names_gp = gpar(fontsize = 8),
-          na_col = "grey90",
-          border = FALSE
-            )
+hub_graph_gen <- graph_from_data_frame(
+  d = edge_data, 
+  directed = FALSE, 
+  vertices = hub_nodes_gen
+)
 
- #Saving 
-#png(filename = file.path(output_path, "gen_heat.png"), 
- #   width = 16, 
-  #  height = 8, 
-   # units = "in", 
-    #res = 300)
+#Leiden Clustering
+#abs_rhoG as weights so strong negative correlations cluster together
+leiden_clusters <- cluster_leiden(
+  hub_graph_gen, 
+  objective_function = "modularity", 
+  weights = E(hub_graph_gen)$abs_rhoG
+)
 
-draw(genetic_heatmap, column_title = "Genetic Architecture of IP-Protein Pairs")
+V(hub_graph_gen)$module <- as.character(leiden_clusters$membership)
 
-#dev.off() if want to save the above uncomment the saving 
+#Colour - IPs are coloured by modules, proteins remain
+V(hub_graph_gen)$colour_group <- ifelse(
+  V(hub_graph_gen)$type == "Protein", 
+  "Protein", 
+  paste("Module", V(hub_graph_gen)$module)
+)
+
+graph_nodes <- igraph::as_data_frame(hub_graph_gen, what = "vertices")
+
+#Colours, shapes, lines
+unique_modules <- sort(unique(graph_nodes$colour_group[graph_nodes$colour_group != "Protein"]))
+
+final_colours_gen <- c(
+  "Protein" = "black", 
+  setNames(viridis_pal(option = "viridis")(length(unique_modules)), unique_modules)
+)
+
+#Shapes - keep proteins same, IPs shapes for lineage
+unique_lineages_gen <- sort(unique(graph_nodes$shape_map[graph_nodes$shape_map != "Protein"]))
+
+shape_sequence_gen <- seq(from = 15, length.out = length(unique_lineages_gen)) 
+lineage_vals_gen <- setNames(shape_sequence_gen, unique_lineages_gen)
+#Proteins have a small dot
+lineage_vals_gen["Protein"] <- 20 
+
+#Lines
+edge_line_vals <- c("Positive" = "solid", "Negative" = "dotted")
+
+#Graphing
+#Fruchterman-Reingold (FR) layout 
+ggraph(hub_graph_gen, layout = "fr", weights = abs_rhoG) +
+  #Edges dotted for negative, positive for sold 
+  geom_edge_arc(
+    aes(edge_linetype = edge_sign), 
+    alpha = 0.5, 
+    color = "grey60", 
+    strength = 0.1
+  ) +
+  scale_edge_linetype_manual(values = edge_line_vals) +
+  
+  #Nodes - module as colours, shapes as lineage
+  geom_node_point(
+    aes(color = colour_group, shape = shape_map), 
+    size = 4,
+    alpha = 0.9
+  ) +
+  
+  #Only label proteins
+  geom_node_text(
+    aes(label = name, filter = type == "Protein"),
+    repel = TRUE, 
+    size = 3,
+    fontface = "bold",
+    box.padding = 0.4,
+    point.padding = 0.4
+  ) +
+  
+  scale_color_manual(values = final_colours_gen, breaks = unique_modules) + 
+  scale_shape_manual(values = lineage_vals_gen) +
+  
+  #Aesthetics
+  theme_void() +
+  theme(
+     plot.background = element_rect(fill = "white", color = NA),
+     panel.background = element_rect(fill = "white", color = NA),
+     plot.title = element_text(hjust = 0.5, face = "bold", size = 14),
+     plot.subtitle = element_text(hjust = 0.5, size = 11),
+     plot.margin = margin(t = 10, r = 10, b = 10, l = 10, unit = "pt"),
+     legend.position = "right",
+     legend.box = "vertical",
+     legend.text = element_text(size = 10),
+     legend.title = element_text(size = 10, face = "bold")
+  ) +
+  labs(
+    title = "Network of Genetically Significant Hubs (Leiden Clustered)",   
+    subtitle = "Based on Leiden clustering. Filtered for |ρG| >0.3 and IPs associated to more than one protein. Fruchterman-Reingold (FR) layout was used.",
+    color = "Leiden Modules",
+    shape = "Lineages by Shape",
+    edge_linetype = "rhoG Direction"
+  ) +
+  guides(edge_width = "none")
+
+
+#Saving plot
+ggsave(
+  filename = "genetic_hits/Static_Gen_IP_Protein_Network_Hubs.png", 
+  path = output_path,
+  width = 20,     
+  height = 15
+)
+
 ```
 
 ## 7. Environmental Hits Analysis
@@ -1481,7 +1581,7 @@ hub_nodes_env$colour_group <- factor(hub_nodes_env$colour_group,levels = c("Prot
 unique_conn_env <- sort(unique(hub_nodes_env$colour_group[hub_nodes_env$colour_group != "Protein"])) 
 
 #Final colours for each + black for protein 
-final_colors_env <- c("Protein" = "black", setNames(viridis_pal(option = "viridis")(length(unique_conn_env)), unique_conn_env)) 
+final_colours_env <- c("Protein" = "black", setNames(viridis_pal(option = "viridis")(length(unique_conn_env)), unique_conn_env)) 
 
 #Shape for aesthetics 
 lineage_vals_env <- c(
@@ -1513,7 +1613,7 @@ ggraph(hub_graph_env, layout = "fr") +
                  box.padding = 0.5,                  
                  point.padding = 0.5)+   
   #Colours   
-  scale_color_manual(values = final_colors_env,breaks = unique_conn_env 
+  scale_color_manual(values = final_colours_env,breaks = unique_conn_env 
   ) + 
   #Size based on hub   
   scale_shape_manual(values = lineage_vals_env) + 
@@ -1542,7 +1642,152 @@ ggsave(
   height = 8 )
 ```
 
-### 7.7 Heatmap
+### 7.7 Static IP-Protein Network Graph
+
+```{r}
+
+#Filterings thresholds
+rho_threshold <- 0.3     
+protein_sharing <- 2     
+
+lineage_info_env <- environmental_hits %>%
+  select(trait1, Sub.Lineage) %>%
+  distinct(trait1, .keep_all = TRUE)
+
+#FILTERING
+hub_data_env <- environmental_hits %>%
+  filter(abs(rhoE) >= rho_threshold) %>% 
+  group_by(trait1) %>%
+  filter(n() >= protein_sharing) %>% 
+  mutate(n_count = n()) %>%
+  ungroup() %>%
+  mutate(
+    abs_rhoE = abs(rhoE),
+    edge_sign = ifelse(rhoE >= 0, "Positive", "Negative") 
+  )
+
+#Nodes
+hub_nodes_env <- data.frame(
+  name = unique(c(hub_data_env$trait1, hub_data_env$trait2))
+) %>%
+  left_join(lineage_info_env, by = c("name" = "trait1")) %>%
+  mutate(
+    type = ifelse(name %in% lineage_info_env$trait1, "IP", "Protein"),
+    shape_map = ifelse(type == "Protein", "Protein", Sub.Lineage)
+  )
+
+#Edges
+edge_data_env <- hub_data_env %>% select(trait1, trait2, rhoE, abs_rhoE, edge_sign)
+
+hub_graph_env <- graph_from_data_frame(
+  d = edge_data_env, 
+  directed = FALSE, 
+  vertices = hub_nodes_env
+)
+
+#Leiden Clustering
+#|rhoE| as weights
+leiden_clusters_env <- cluster_leiden(
+  hub_graph_env, 
+  objective_function = "modularity", 
+  weights = E(hub_graph_env)$abs_rhoE
+)
+
+V(hub_graph_env)$module <- as.character(leiden_clusters_env$membership)
+
+#IPs are coloured by modules, proteins remain
+V(hub_graph_env)$colour_group <- ifelse(
+  V(hub_graph_env)$type == "Protein", 
+  "Protein", 
+  paste("Module", V(hub_graph_env)$module)
+)
+
+graph_nodes_env <- igraph::as_data_frame(hub_graph_env, what = "vertices")
+
+#Colours, shapes, lines
+unique_modules_env <- sort(unique(graph_nodes_env$colour_group[graph_nodes_env$colour_group != "Protein"]))
+
+final_colours_env <- c(
+  "Protein" = "black", 
+  setNames(viridis_pal(option = "viridis")(length(unique_modules_env)), unique_modules_env)
+)
+
+# Shapes - keep proteins same, IPs shapes for lineage
+unique_lineages_env <- sort(unique(graph_nodes_env$shape_map[graph_nodes_env$shape_map != "Protein"]))
+
+shape_sequence_env <- seq(from = 15, length.out = length(unique_lineages_env)) 
+lineage_vals_env <- setNames(shape_sequence_env, unique_lineages_env)
+#protein shape is dot
+lineage_vals_env["Protein"] <- 20 
+
+#Lines
+edge_line_vals <- c("Positive" = "solid", "Negative" = "dotted")
+
+#Graphing
+# Fruchterman-Reingold (FR) layout 
+ggraph(hub_graph_env, layout = "fr", weights = abs_rhoE) +
+  #Edges
+  geom_edge_arc(
+    aes(edge_linetype = edge_sign), 
+    alpha = 0.5, 
+    color = "grey60", 
+    strength = 0.1
+  ) +
+  scale_edge_linetype_manual(values = edge_line_vals) +
+  
+  #Nodes - module as colours, shapes as lineage
+  geom_node_point(
+    aes(color = colour_group, shape = shape_map), 
+    size = 4,
+    alpha = 0.9
+  ) +
+  
+  #Labelling - only proteins
+  geom_node_text(
+    aes(label = name, filter = type == "Protein"),
+    repel = TRUE, 
+    size = 3,
+    fontface = "bold",
+    box.padding = 0.4,
+    point.padding = 0.4
+  ) +
+  
+  scale_color_manual(values = final_colours_env, breaks = unique_modules_env) + 
+  scale_shape_manual(values = lineage_vals_env) +
+  
+  #Aesthetics
+  theme_void() +
+  theme(
+     plot.background = element_rect(fill = "white", color = NA),
+     panel.background = element_rect(fill = "white", color = NA),
+     plot.title = element_text(hjust = 0.5, face = "bold", size = 14),
+     plot.subtitle = element_text(hjust = 0.5, size = 11),
+     plot.margin = margin(t = 10, r = 10, b = 10, l = 10, unit = "pt"),
+     legend.position = "right",
+     legend.box = "vertical",
+     legend.text = element_text(size = 10),
+     legend.title = element_text(size = 10, face = "bold")
+  ) +
+  labs(
+    title = "Network of Environmentally Significant Hubs (Leiden Clustered)",   
+    subtitle = paste0("Based on Leiden clustering. Filtered for |ρE| >0.3 and IPs associated to more than one protein. Fruchterman-Reingold (FR) layout was used ", protein_sharing, " proteins. FR layout."),
+    color = "Leiden Modules",
+    shape = "Lineages by Shape",
+    edge_linetype = "rhoE Direction"
+  ) +
+  guides(edge_width = "none")
+
+#Saving
+ggsave(
+  filename = "environmental_hits/Static_Env_IP_Protein_Network_Hubs.png", 
+  path = output_path, 
+  width = 20,     
+  height = 15
+)
+
+```
+
+### 7.8 Heatmap
 
 ```{r}
 environmental_matrix <- conv_matrix (environmental_hits, "rhoE")
@@ -2125,5 +2370,3 @@ ggplot(env_gen, aes(x = rhoE, y = rhoG, color = trait2)) +
     color = "Protein"
   )
 ```
-
-## 
