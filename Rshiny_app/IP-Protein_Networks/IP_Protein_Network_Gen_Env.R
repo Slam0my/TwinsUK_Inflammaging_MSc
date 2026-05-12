@@ -1,17 +1,30 @@
-#RShiny Web for IP-protein network graphs
+#RShiny Web for IP-Protein network graphs
+#Contains genetically and environmentally significant IP-Protein pairs in a network
+#You can select and filter parameters with the sliders and dropdowns to observe specific modules, lineages and proteins
+#Network graphs are based on Leiden clustering for modules and uses the force directed layout from ForceAtlas2
+#Weights are based on |ρG| or |ρE|
+
 
 #Load libraries
+if (!require("shiny")) install.packages("shiny")
+if (!require("shinydashboard")) install.packages("shinydashboard")
+if (!require("visNetwork")) install.packages("visNetwork")
+if (!require("visNetwork")) install.packages("visNetwork")
+if (!require("dplyr")) install.packages("dplyr")
+if (!require("igraph")) install.packages("igraph")
+if (!require("viridis")) install.packages("viridis")
 
 library(shiny)
 library(shinydashboard)
-library(visNetwork)
 library(dplyr)
-library(igraph)
-library(viridis)
+library(visNetwork) #Network graph
+library(igraph) #Network graph
+library(viridis) #Colour
 
 
 #Load data
 #Loading in the solar results analysis filtering.
+#Make sure this RData is within the same file
 load("solar_analysis_filtering_results.RData")
 
 
@@ -21,15 +34,17 @@ all_possible_lineages <- sort(all_possible_lineages[!is.na(all_possible_lineages
 global_lineage_colours <- setNames(viridis_pal(option = "viridis")(length(all_possible_lineages)), all_possible_lineages)
 
 
-#Static clusters
+#Static clusters based on Leiden
+#static for stability 
+#Genetic
 g_base_gen <- graph_from_data_frame(genetic_0.1_hits %>% mutate(abs_rhoG = abs(rhoG)) %>% select(trait1, trait2, abs_rhoG), directed = FALSE)
 leiden_gen <- cluster_leiden(g_base_gen, objective_function = "modularity", weights = E(g_base_gen)$abs_rhoG)
 gen_module_lookup <- data.frame(name = V(g_base_gen)$name, module = as.character(leiden_gen$membership))
 
+#Environmental
 g_base_env <- graph_from_data_frame(environmental_hits %>% mutate(abs_rhoE = abs(rhoE)) %>% select(trait1, trait2, abs_rhoE), directed = FALSE)
 leiden_env <- cluster_leiden(g_base_env, objective_function = "modularity", weights = E(g_base_env)$abs_rhoE)
 env_module_lookup <- data.frame(name = V(g_base_env)$name, module = as.character(leiden_env$membership))
-
 
 
 #Key/legend
@@ -69,11 +84,18 @@ build_custom_legend <- function(is_genetic = TRUE) {
     
     #Links 
     '<h4 style="text-align: center; font-weight: bold; font-size: 20px;">', link_title, '</h4>',
-    '<div style="font-size: 16px; text-align: center; margin-bottom: 15px;">',
-    '<div style="margin-bottom: 8px;"><b>&mdash;&mdash;&mdash;</b> Solid: +ρ</div>',
-    '<div><b>- - - -</b> Dotted: -ρ</div>',
+    '<div style="font-size: 14px; text-align: center; margin-bottom: 15px;">',
+    '<p style="margin-bottom: 10px;">Line Thickness = Correlation Strength</p>',
+    '<div style="display: flex; align-items: center; justify-content: center; gap: 15px; margin-bottom: 15px;">',
+    '<div style="text-align: center;"><div style="width: 30px; height: 1px; background-color: #7d7d7d; margin: 0 auto 5px auto;"></div>Weak</div>',
+    '<div style="text-align: center;"><div style="width: 30px; height: 4px; background-color: #7d7d7d; margin: 0 auto 5px auto;"></div>Med</div>',
+    '<div style="text-align: center;"><div style="width: 30px; height: 8px; background-color: #7d7d7d; margin: 0 auto 5px auto;"></div>Strong</div>',
     '</div>',
-    '<hr style="border-top: 2px solid #ddd;">',
+    '<div style="margin-bottom: 8px; font-size: 15px;"><b>&mdash;&mdash;&mdash;</b> Solid: Positive (+ρ)</div>',
+    '<div style="font-size: 15px;"><b>- - - -</b> Dotted: Negative (-ρ)</div>',
+    '</div><hr style="border-top: 2px solid #ddd;">',
+    
+    
     
     #Lineages
     '<h4 style="text-align: center; font-weight: bold; margin-bottom: 15px; font-size: 20px;">Lineages</h4>',
@@ -89,6 +111,7 @@ build_custom_legend <- function(is_genetic = TRUE) {
 #UI
 ui <- dashboardPage(
   skin = "purple",
+  
   dashboardHeader(title = "IP-Protein Networks"),
   
   dashboardSidebar(
@@ -103,7 +126,7 @@ ui <- dashboardPage(
       #GENETICS
       tabItem(tabName = "gen_pairs",
               h2("Genetically Significant IP-Protein Pairs", align = "center"),
-              p("Analysis based on shared genetic architecture (ρG) between Immunophenotypes (IPs) and Circulating Proteins. This network is based on Leiden clustering with weights using |ρG|. ForceAtlas2 is used as a force directed layout. Please bare with the time for loading graphs.", align = "center"),
+              p("Analysis based on shared genetic architecture (ρG) between Immunophenotypes (IPs) and Circulating Proteins. This network is based on Leiden clustering with weights using |ρG|. ForceAtlas2 is used as a force directed layout. Please bare with the time for loading graphs. For these genetically signficant pairs, h² > 0.1 & ρG FDR < 0.05 was implemented. The maximum |ρG| between a pair reached 0.83. The maximum number of proteins shared by IPs was 9.", align = "center"),
               
               fluidRow(
                 #Sliders
@@ -118,9 +141,9 @@ ui <- dashboardPage(
                                 value = 2, 
                                 step = 1),
                     sliderInput("gen_thresh", 
-                                "|ρG| Strength:", 
+                                "Min |ρG| Strength:", 
                                 min = 0.0, 
-                                max = 0.9, 
+                                max = 0.8, 
                                 value = 0.3,
                                 step = 0.05)
                 ),
@@ -133,28 +156,22 @@ ui <- dashboardPage(
                       column(4, selectInput("gen_mod", "Select Leiden Module:", choices = "All")),
                       column(4, selectInput("gen_lin", "Select Immune Lineage:", choices = "All")),
                       column(4, selectInput("gen_prot", "Select Protein Hub:", choices = "All"))
-                    )
-                )
+                    ),
+                    hr(),
+                    htmlOutput("gen_module_summary"))
               ),
-              
               fluidRow(
-                #visNetwork graph
-                box(width = 9, status = "primary",
-                    visNetworkOutput("network_graph_gen", height = "750px")
-                ),
-                #Legend/ket
-                box(title = "Network Key", width = 3, status = "primary", solidHeader = TRUE, 
-                    build_custom_legend(is_genetic = TRUE)
-                )
+                box(width = 9, status = "primary", visNetworkOutput("network_graph_gen", height = "750px")),
+                box(title = "Key", width = 3, status = "primary", solidHeader = TRUE, build_custom_legend(TRUE))
               )
-          ),
-
+      ),
               
-              #Environmental
+              #ENVIRONMENTAL
               tabItem(tabName = "env_pairs",
                       h2("Environmentally Significant IP-Protein Pairs", align = "center"),
-                      p("Analysis based on shared environmental architecture (ρE). This network is based on Leiden clustering with weights using |ρE|. ForceAtlas2 is used as a force directed layout. Please bare with the time for loading graphs.", align = "center"),
+                      p("Analysis based on environmental architecture (ρE). This network is based on Leiden clustering with weights using |ρE|. ForceAtlas2 is used as a force directed layout. Please bare with the time for loading graphs. For these environmentally signficant pairs, ρE FDR < 0.05 was implemented. The maximum |ρE| between a pair reached 0.45. The maximum number of proteins shared by IPs was 6.", align = "center"),
                       fluidRow(
+                        #Sliders
                         box(title = "Filtering:", 
                             width = 4, 
                             status = "success", 
@@ -166,12 +183,13 @@ ui <- dashboardPage(
                                         value = 2, 
                                         step = 1),
                             sliderInput("env_thresh", 
-                                        "|ρE| Strength:", 
+                                        "Min |ρE| Strength:", 
                                         min = 0.0, 
-                                        max = 0.5, 
+                                        max = 0.45, 
                                         value = 0.3, 
                                         step = 0.05)
                         ),
+                        #Dropdowns
                         box(title = "Selection:", 
                             width = 8, 
                             status = "success", 
@@ -180,31 +198,26 @@ ui <- dashboardPage(
                               column(4, selectInput("env_mod", "Select Leiden Module:", choices = "All")),
                               column(4, selectInput("env_lin", "Select Immune Lineage:", choices = "All")),
                               column(4, selectInput("env_prot", "Select Protein Hub:", choices = "All"))
-                            )
-                        )
+                            ),
+                            hr(),
+                            htmlOutput("env_module_summary"))
                       ),
                       fluidRow(
-                        #visNetwork graph
-                        box(width = 9, status = "success",
-                            visNetworkOutput("network_graph_env", height = "750px")
-                        ),
-                        #legend/key
-                        box(title = "Network Key", width = 3, status = "success", solidHeader = TRUE, 
-                            build_custom_legend(is_genetic = FALSE)
-                        )
-                      )#End env
-      
-      
-      )#End tab items
+                        box(width = 9, status = "success", visNetworkOutput("network_graph_env", height = "750px")),
+                        box(title = "Key", width = 3, status = "success", solidHeader = TRUE, build_custom_legend(FALSE))
+                      )
+              )
     )
-  ))
+  )
+)
+
                     
-                    
-                    
+
+#Server
                     
 server <- function(input, output, session) {
   
-  #REACTIVEs
+  #REACTIVES
   #GENETIC NETWORK
   #Reactive calculations based on input slider
   network_data_gen <- reactive({
@@ -296,6 +309,62 @@ server <- function(input, output, session) {
       visUpdateEdges(edges = data$edges %>% select(id, original_color) %>% mutate(color = ifelse(id %in% t_e_ids, original_color, "rgba(200,200,200,0.05)")))
   })
   
+  #Module summary
+  output$gen_module_summary <- renderUI({
+    data <- network_data_gen(); req(data)
+    mod <- input$gen_mod
+    
+    if(mod == "All") {
+      return(HTML("<p style='color: #555; font-style: italic;'>Select a Module for information.</p>"))
+    }
+    
+    #All Ips
+    mod_ips <- data$nodes %>% filter(module == mod, type == "IP")
+    if(nrow(mod_ips) == 0) return(HTML("<p>No IPs in this module.</p>"))
+    
+    #IP summary
+    overall_lin_counts <- mod_ips %>% count(shape_map) %>% arrange(desc(n))
+    overall_lin_text <- paste0(overall_lin_counts$shape_map, " (", overall_lin_counts$n, ")", collapse = ", ")
+    
+    #Find edges connection
+    mod_edges <- data$edges %>% filter(from %in% mod_ips$id | to %in% mod_ips$id)
+    
+    #Ips to proteins
+    edge_details <- mod_edges %>%
+      left_join(data$nodes %>% select(id, type, shape_map), by = c("from" = "id")) %>% rename(from_type = type, from_lineage = shape_map) %>%
+      left_join(data$nodes %>% select(id, type, shape_map), by = c("to" = "id")) %>% rename(to_type = type, to_lineage = shape_map)
+    
+    connections <- edge_details %>%
+      mutate(
+        Protein = ifelse(from_type == "Protein", from, to),
+        IP = ifelse(from_type == "IP", from, to),
+        Lineage = ifelse(from_type == "IP", from_lineage, to_lineage)
+      ) %>%
+      filter(IP %in% mod_ips$id) 
+    
+    if(nrow(connections) > 0) {
+      prot_summary <- connections %>%
+        group_by(Protein, Lineage) %>%
+        summarise(n = n(), .groups = "drop") %>%
+        group_by(Protein) %>%
+        summarise(details = paste0(Lineage, " (", n, ")", collapse = ", "), .groups = "drop") %>%
+        mutate(html_string = paste0("<li><b>", Protein, ":</b> ", details, "</li>")) %>%
+        pull(html_string) %>% paste(collapse = "")
+      
+      prot_text <- paste0("<ul style='margin-top: 5px; margin-bottom: 0; padding-left: 20px;'>", prot_summary, "</ul>")
+      unique_prots_count <- length(unique(connections$Protein))
+    } else {
+      prot_text <- "None"
+      unique_prots_count <- 0
+    }
+    
+    HTML(paste0(
+      "<div style='font-size: 15px;'>",
+      "<span style='color: #1e88e5;'><b>Total IPs in Module ", mod, " (", nrow(mod_ips), "):</b></span><br>", overall_lin_text, "<br><br>",
+      "<span style='color: #1e88e5;'><b>Total Proteins (", unique_prots_count, "):</b></span>", prot_text,
+      "</div>"
+    ))
+  })
   
   
   
@@ -382,9 +451,109 @@ server <- function(input, output, session) {
       visUpdateNodes(nodes = data$nodes %>% select(id, original_color, original_font_color) %>% mutate(color = ifelse(id %in% t_ids, original_color, "rgba(200,200,200,0.1)"), font.color = ifelse(id %in% t_ids, original_font_color, "rgba(200,200,200,0)"))) %>%
       visUpdateEdges(edges = data$edges %>% select(id, original_color) %>% mutate(color = ifelse(id %in% t_e_ids, original_color, "rgba(200,200,200,0.05)")))
   })
+  
+  #Module summary
+  output$env_module_summary <- renderUI({
+    data <- network_data_env(); req(data)
+    mod <- input$env_mod
+    
+    if(mod == "All") {
+      return(HTML("<p style='color: #555; font-style: italic;'>Select a Module for information.</p>"))
+    }
+    
+    mod_ips <- data$nodes %>% filter(module == mod, type == "IP")
+    if(nrow(mod_ips) == 0) return(HTML("<p>No IPs in this module.</p>"))
+    
+    overall_lin_counts <- mod_ips %>% count(shape_map) %>% arrange(desc(n))
+    overall_lin_text <- paste0(overall_lin_counts$shape_map, " (", overall_lin_counts$n, ")", collapse = ", ")
+
+    mod_edges <- data$edges %>% filter(from %in% mod_ips$id | to %in% mod_ips$id)
+
+    edge_details <- mod_edges %>%
+      left_join(data$nodes %>% select(id, type, shape_map), by = c("from" = "id")) %>% rename(from_type = type, from_lineage = shape_map) %>%
+      left_join(data$nodes %>% select(id, type, shape_map), by = c("to" = "id")) %>% rename(to_type = type, to_lineage = shape_map)
+    
+    connections <- edge_details %>%
+      mutate(
+        Protein = ifelse(from_type == "Protein", from, to),
+        IP = ifelse(from_type == "IP", from, to),
+        Lineage = ifelse(from_type == "IP", from_lineage, to_lineage)
+      ) %>%
+      filter(IP %in% mod_ips$id)
+    
+    if(nrow(connections) > 0) {
+      prot_summary <- connections %>%
+        group_by(Protein, Lineage) %>% summarise(n = n(), .groups = "drop") %>%
+        group_by(Protein) %>% summarise(details = paste0(Lineage, " (", n, ")", collapse = ", "), .groups = "drop") %>%
+        mutate(html_string = paste0("<li><b>", Protein, ":</b> ", details, "</li>")) %>%
+        pull(html_string) %>% paste(collapse = "")
+      
+      prot_text <- paste0("<ul style='margin-top: 5px; margin-bottom: 0; padding-left: 20px;'>", prot_summary, "</ul>")
+      unique_prots_count <- length(unique(connections$Protein))
+    } else {
+      prot_text <- "None"
+      unique_prots_count <- 0
+    }
+    
+    HTML(paste0(
+      "<div style='font-size: 15px;'>",
+      "<span style='color: #1e88e5;'><b>Total IPs in Module ", mod, " (", nrow(mod_ips), "):</b></span><br>", overall_lin_text, "<br><br>",
+      "<span style='color: #1e88e5;'><b>Total Proteins (", unique_prots_count, ")</b></span>", prot_text,
+      "</div>"
+    ))
+  })
+  
+  #Shared stats observed
+  observe({
+    data <- network_data_gen(); req(data)
+    mod <- input$gen_mod; lin <- input$gen_lin; prot <- input$gen_prot
+    valid_mod <- data$nodes %>% filter(type == "IP"); if(lin != "All") valid_mod <- valid_mod %>% filter(shape_map == lin); if(prot != "All") valid_mod <- valid_mod %>% filter(id %in% c((data$edges %>% filter(from == prot | to == prot))$from, (data$edges %>% filter(from == prot | to == prot))$to))
+    valid_lin <- data$nodes %>% filter(type == "IP"); if(mod != "All") valid_lin <- valid_lin %>% filter(module == mod); if(prot != "All") valid_lin <- valid_lin %>% filter(id %in% c((data$edges %>% filter(from == prot | to == prot))$from, (data$edges %>% filter(from == prot | to == prot))$to))
+    valid_prot <- data$nodes %>% filter(type == "IP"); if(mod != "All") valid_prot <- valid_prot %>% filter(module == mod); if(lin != "All") valid_prot <- valid_prot %>% filter(shape_map == lin)
+    eprot <- data$edges %>% filter(from %in% valid_prot$id | to %in% valid_prot$id)
+    updateSelectInput(session, "gen_mod", choices = c("All", as.character(sort(unique(valid_mod$module[!is.na(valid_mod$module)])))), selected = ifelse(mod %in% valid_mod$module, mod, "All"))
+    updateSelectInput(session, "gen_lin", choices = c("All", as.character(sort(unique(valid_lin$shape_map)))), selected = ifelse(lin %in% valid_lin$shape_map, lin, "All"))
+    updateSelectInput(session, "gen_prot", choices = c("All", as.character(sort(unique(data$nodes$id[data$nodes$type == "Protein" & data$nodes$id %in% c(eprot$from, eprot$to)])))), selected = ifelse(prot %in% c(eprot$from, eprot$to), prot, "All"))
+  })
+  
+  observe({
+    data <- network_data_env(); req(data)
+    mod <- input$env_mod; lin <- input$env_lin; prot <- input$env_prot
+    valid_mod <- data$nodes %>% filter(type == "IP"); if(lin != "All") valid_mod <- valid_mod %>% filter(shape_map == lin); if(prot != "All") valid_mod <- valid_mod %>% filter(id %in% c((data$edges %>% filter(from == prot | to == prot))$from, (data$edges %>% filter(from == prot | to == prot))$to))
+    valid_lin <- data$nodes %>% filter(type == "IP"); if(mod != "All") valid_lin <- valid_lin %>% filter(module == mod); if(prot != "All") valid_lin <- valid_lin %>% filter(id %in% c((data$edges %>% filter(from == prot | to == prot))$from, (data$edges %>% filter(from == prot | to == prot))$to))
+    valid_prot <- data$nodes %>% filter(type == "IP"); if(mod != "All") valid_prot <- valid_prot %>% filter(module == mod); if(lin != "All") valid_prot <- valid_prot %>% filter(shape_map == lin)
+    eprot <- data$edges %>% filter(from %in% valid_prot$id | to %in% valid_prot$id)
+    updateSelectInput(session, "env_mod", choices = c("All", as.character(sort(unique(valid_mod$module[!is.na(valid_mod$module)])))), selected = ifelse(mod %in% valid_mod$module, mod, "All"))
+    updateSelectInput(session, "env_lin", choices = c("All", as.character(sort(unique(valid_lin$shape_map)))), selected = ifelse(lin %in% valid_lin$shape_map, lin, "All"))
+    updateSelectInput(session, "env_prot", choices = c("All", as.character(sort(unique(data$nodes$id[data$nodes$type == "Protein" & data$nodes$id %in% c(eprot$from, eprot$to)])))), selected = ifelse(prot %in% c(eprot$from, eprot$to), prot, "All"))
+  })
+  
+  observe({
+    data <- network_data_gen(); req(data, input$gen_mod, input$gen_lin, input$gen_prot)
+    a_ips <- data$nodes %>% filter(type == "IP"); if(input$gen_mod != "All") a_ips <- a_ips %>% filter(module == input$gen_mod); if(input$gen_lin != "All") a_ips <- a_ips %>% filter(shape_map == input$gen_lin)
+    a_prots <- data$nodes %>% filter(type == "Protein"); if(input$gen_prot != "All") a_prots <- a_prots %>% filter(id == input$gen_prot)
+    a_edges <- data$edges %>% filter((from %in% a_ips$id & to %in% a_prots$id) | (to %in% a_ips$id & from %in% a_prots$id))
+    t_ids <- if(input$gen_mod == "All" && input$gen_lin == "All" && input$gen_prot == "All") data$nodes$id else unique(c(a_edges$from, a_edges$to))
+    t_e_ids <- if(input$gen_mod == "All" && input$gen_lin == "All" && input$gen_prot == "All") data$edges$id else a_edges$id
+    visNetworkProxy("network_graph_gen") %>% visUpdateNodes(nodes = data$nodes %>% select(id, original_color, original_font_color) %>% mutate(color = ifelse(id %in% t_ids, original_color, "rgba(200,200,200,0.1)"), font.color = ifelse(id %in% t_ids, original_font_color, "rgba(200,200,200,0)"))) %>% visUpdateEdges(edges = data$edges %>% select(id, original_color) %>% mutate(color = ifelse(id %in% t_e_ids, original_color, "rgba(200,200,200,0.05)")))
+  })
+  
+  observe({
+    data <- network_data_env(); req(data, input$env_mod, input$env_lin, input$env_prot)
+    a_ips <- data$nodes %>% filter(type == "IP"); if(input$env_mod != "All") a_ips <- a_ips %>% filter(module == input$env_mod); if(input$env_lin != "All") a_ips <- a_ips %>% filter(shape_map == input$env_lin)
+    a_prots <- data$nodes %>% filter(type == "Protein"); if(input$env_prot != "All") a_prots <- a_prots %>% filter(id == input$env_prot)
+    a_edges <- data$edges %>% filter((from %in% a_ips$id & to %in% a_prots$id) | (to %in% a_ips$id & from %in% a_prots$id))
+    t_ids <- if(input$env_mod == "All" && input$env_lin == "All" && input$env_prot == "All") data$nodes$id else unique(c(a_edges$from, a_edges$to))
+    t_e_ids <- if(input$env_mod == "All" && input$env_lin == "All" && input$env_prot == "All") data$edges$id else a_edges$id
+    visNetworkProxy("network_graph_env") %>% visUpdateNodes(nodes = data$nodes %>% select(id, original_color, original_font_color) %>% mutate(color = ifelse(id %in% t_ids, original_color, "rgba(200,200,200,0.1)"), font.color = ifelse(id %in% t_ids, original_font_color, "rgba(200,200,200,0)"))) %>% visUpdateEdges(edges = data$edges %>% select(id, original_color) %>% mutate(color = ifelse(id %in% t_e_ids, original_color, "rgba(200,200,200,0.05)")))
+  })
 }
-  
-  
+
+
+
   
 
+  
+  
+#Run App
 shinyApp(ui = ui, server = server)

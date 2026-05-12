@@ -6,7 +6,7 @@ editor: visual
 
 # Protein Protein Genetic Correlations
 
-With the SOLAR analysis results performed for all proteins protein associations, identify the genetic and environmental correlations. The SOLAR ran for protein-protein associations used the twins to identify whether they share the same proteins
+With the SOLAR analysis results performed for all proteins protein associations, identify the genetic and environmental correlations. The SOLAR ran for protein-protein associations used the twins to identify whether they share the same proteins.
 
 ## 1. Set Up
 
@@ -15,17 +15,6 @@ With the SOLAR analysis results performed for all proteins protein associations,
 ```{r, message = FALSE}
 library(tidyr)
 library(dplyr)
-
-#graphing
-library(viridis) #Colour blind friendly palette
-library(ComplexHeatmap)
-
-#Network graphs
-library(igraph)
-library(ggraph)
-library(tidygraph)
-library(ggforce) #Circular network modules
-
 ```
 
 ### 1.2 Load data
@@ -54,7 +43,7 @@ set.seed(123)
 
 ## 2. Filtering
 
-Using FDR filtering
+Using FDR filtering. Filter for both genetic and environmental hits.
 
 ```{r}
 #Use FDR adjustment
@@ -67,11 +56,11 @@ prot_data_fdr <- prot_data %>%
 #Filter FDR <0.05 for genetic hits
 prot_gen_0.1_hits <- prot_data_fdr %>%
   filter(h2r1 > 0.1 & h2r2 > 0.1 & rhoG_FDR < 0.05)
+
+#Filter FDR <0.05 for environrmntal hits
+prot_env_hits<- prot_data_fdr  %>%
+  filter( rhoE_FDR < 0.05)
 ```
-
-I only filtered for genetic hits. Perhaps can do environmental and both.
-
-Can find more about the top pairs and correlations.
 
 ## 3. Saving the output environment
 
@@ -82,6 +71,8 @@ save.image(file = "prot_prot_filtering_results.RData")
 ```
 
 ## 4. Investigations
+
+### Genetic
 
 ```{r}
 prot_gen_0.1_hits  %>%
@@ -104,7 +95,7 @@ Obtaining heritability of proteins overall. As proteins are in both trait column
 
 ```{r}
 #Combining all unique proteins
-unique_heritability <- prot_gen_0.1_hits %>%
+unique_heritability_gen <- prot_gen_0.1_hits %>%
   select(trait1, h2r1) %>%
   rename(protein = trait1, h2 = h2r1) %>%
   bind_rows(
@@ -115,168 +106,54 @@ unique_heritability <- prot_gen_0.1_hits %>%
   distinct(protein, .keep_all = TRUE) #Duplicate removal
 
 #Calculating stats
-final_h2_summary <- unique_heritability %>%
+genfinal_h2_summary <- unique_heritability_gen %>%
   summarise(
     mean_h2 = mean(h2),
     sd_h2 = sd(h2),
     max_h2 = max(h2)
   )
 
-final_h2_summary
+genfinal_h2_summary
 ```
 
-## 5. Graphing
-
-#### 5.1 Network Graphs
-
-PPI network. Relationship between proteins. Identify clusters/modules and key proteins.
+### Environmental
 
 ```{r}
-#Building the edges and nodes from the genetic protein hits
-prot_edges <- prot_gen_0.1_hits %>%
-  filter(abs(rhoG) > 0.5) %>%  #filtered 0.5 for visuals
-  mutate(weight = abs(rhoG)) %>% #abs value strength
-  select(from = trait1, to = trait2, weight, rhoG)
+prot_env_hits  %>%
+  summarise (
+    mean_h2r1 = mean(h2r1),
+    sd_h2r1   = sd(h2r1),
+    max_h2r1 = max(h2r1),
+    mean_h2r2 = mean(h2r2),
+    sd_h2r2= sd(h2r2),
+    max_h2r2 = max(h2r2),
+    mean_rhoG = mean(abs(rhoG)),
+    sd_rhoG= sd(abs(rhoG)),
+    mean_rhoE = mean(abs(rhoE)),
+    sd_rhoE= sd(abs(rhoE))
+  )
 
-#Matrix to proteins as nodes and correlations as edges
-g_prot_s <- graph_from_data_frame(prot_edges, directed = FALSE)
-
-#Clustering Louvain used to find modules
-cl_prot_s <- cluster_louvain(g_prot_s, weights = E(g_prot_s)$weight)
-
-
-#Building the graph 
-#Tidygraph
-tg_prot <- tbl_graph(
-  nodes = data.frame(
-    name = V(g_prot_s)$name, 
-    module = membership(cl_prot_s)  #from the clustering results
-  ),
-  edges = prot_edges %>%          
-    rename(weight = weight),       
-  directed = FALSE
-)%>%
-  activate(nodes) %>% #for proteins not the edges
-  mutate(Centrality = centrality_degree()) #Proteins correlated with lots more other proteins -> number of edges connected to each node
-#allows to idnetify 'hub' proteins with lots of connections and 'specialist' proteins connected to another or few
-
-
-#Set colours
-n_mods <- length(unique(V(tg_prot)$module))
-viridis_colours <- viridis(n_mods)
-
-#Plotting with ggraph as better visually
-#fr fruchterman-reingold -> related proteins closer together
-ggraph(tg_prot, layout = "fr") +
-  #Nodes and edges
-  geom_edge_link(aes(width = weight, edge_colour = rhoG),alpha = 0.8) +
-  geom_node_point(aes(color = as.factor(module), size = Centrality), alpha = 1)+
-  #Colour
-scale_edge_colour_gradient(low = "black", high = "grey80") +
-  scale_color_manual(values = viridis_colours, name = "Module")+
-  geom_node_text(aes(label = name), repel = TRUE, size = 2.5, 
-                 max.overlaps = 12) +
-  #Aesthetics, layouts
-  theme_void() +
-  theme(
-   plot.background = element_rect(fill = "white", color = NA),
-   panel.background = element_rect(fill = "white", color = NA),
-   plot.title = element_text(hjust = 0.5,face = "bold", size = 14),
-   plot.subtitle = element_text(hjust = 0.5, size = 11),
-   #space for legend
-   plot.margin = margin(t = 10, r = 10, b = 10, l = 10, unit = "pt"),
-   legend.position = "right",
-   legend.box = "vertical",
-   legend.text = element_text(size = 6),
-   legend.title = element_text(size = 8, face = "bold"))+
-  labs(title = "Protein-Protein Genetic Correlation Network",
-       subtitle = "Based on SOLAR analysis results (H² > 0.1)",
-       edge_color = "rhoG",
-       color = "Module") +
-  guides(edge_width = "none")
-
-#Saving plot
-ggsave(
-  filename = "Prot_Network_Graph.png", 
-  path = output_path,
-  width = 10,     
-  height = 6
-)
 ```
-
-The lines/edges represent genetic corerelation RhoG (pG) -\> shared genetic influence / relationship between two proteins.
-
-The size of the points represent centrality which is how many connections/neighbours a proteins has -\> how integrated the protein is in the network.
-
-Colours represent modules -\> how groups of proteins are highly correlated with each other.
-
-SCF and CCL20 are the only protein pair to have a negative rhoG. When searching this up, seems like research supports this that they are environmentally correlated in inflammation.
-
--   filtering of the genetic and those that are environmetally?
-
--   instead of representing the colours, add in circles
 
 ```{r}
+#Combining all unique proteins
+unique_heritability_env <- prot_env_hits %>%
+  select(trait1, h2r1) %>%
+  rename(protein = trait1, h2 = h2r1) %>%
+  bind_rows(
+    prot_gen_0.1_hits %>% 
+    select(trait2, h2r2) %>% 
+    rename(protein = trait2, h2 = h2r2)
+  ) %>%
+  distinct(protein, .keep_all = TRUE) #Duplicate removal
 
-n_mods <- length(unique(V(tg_prot)$module))
-viridis_colours <- viridis(n_mods)
+#Calculating stats
+envfinal_h2_summary <- unique_heritability_env %>%
+  summarise(
+    mean_h2 = mean(h2),
+    sd_h2 = sd(h2),
+    max_h2 = max(h2)
+  )
 
-#Graphing
-ggraph(tg_prot, layout = "fr") +
-  geom_mark_hull(aes(x = x, y = y,fill = as.factor(module)), 
-                 concavity = 5, #Hulls  - curves
-                 radius = unit(0.3, "cm"),  #Smoothing
-                 alpha = 0.8, 
-                 size = 0.05,
-                 expand = unit(0.5, "cm"))+
-  #Edges
-  geom_edge_link(aes(width = weight, 
-                     linetype = ifelse(rhoG < 0, "Negative", "Positive")), 
-                 edge_colour = "grey50", 
-                 alpha = 0.8) +
-  #Negative and positive different line types 
-  scale_edge_linetype_manual(values = c("Negative" = "dashed", "Positive" = "solid"),
-                             name = "Correlation Type") +
-  #Thickness of line is strength 
-  scale_edge_width(range = c(1, 5), name = "ρG Correlation Strength") +
-  #nodes
-  geom_node_point(aes(size = Centrality), color = "grey20", alpha = 0.9) +
-  
-  #Aesthetics
-  scale_fill_viridis_d(name = "Module Group") +
-  
-  #Label
-  geom_node_text(aes(label = name), repel = TRUE, size = 3, fontface = "bold",force = 2,point.padding = unit(0.3, "lines"),max.overlaps = Inf) +
-  
-  theme_void() +
-    theme(
-   plot.background = element_rect(fill = "white", color = NA),
-   panel.background = element_rect(fill = "white", color = NA),
-   plot.title = element_text(hjust = 0.5,face = "bold", size = 16),
-   #space for legend
-   plot.margin = margin(t = 10, r = 10, b = 10, l = 10, unit = "pt"),
-   legend.position = "right",
-   legend.box = "vertical",
-   legend.text = element_text(size = 10),
-   legend.title = element_text(size = 12, face = "bold"))+
-  labs(
-    title = "Protein-Protein Genetic Correlation Network",
-    #edge_colour = "Genetic Strength (ρG)",
-    color = "Module Group",
-    size = "Centrality"
-  ) +
-  guides(guides(edge_width = guide_legend(title = "ρG Correlation Strength")))
-
-#Saving plot
-ggsave(
-  filename = "Prot_Circ_Network_Graph.png", 
-  path = output_path,
-  width = 14,     
-  height = 8
-)
-
+envfinal_h2_summary
 ```
-
-Size of points = centrality so module 5 appears to have the largest hub/connection in the network followed by module 4. Though module 1 contains CXCL10 and CXCL9 but they don't have as many connections.
-
-If I make this interactive, can adjust the filtering of rhoG \>0.5 but will risk overcrowded visualisations.

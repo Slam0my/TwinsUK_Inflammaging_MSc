@@ -396,10 +396,10 @@ We know from genetics_0.1_hits that there are hubs for the IPs and the number of
 
 ### 5.2 Modules
 
-Identify what modules based on Louvain clustering and their specific lineages.
+Identify what modules based on Leiden clustering and their specific lineages.
 
 ```{r}
-#Filter for  hub 
+#Filter for hub 
 ip_intra_hub <- intra_lineage %>%
   filter(shared_count >= 7) %>%
   select(IP_A, IP_B, weighted)
@@ -407,8 +407,10 @@ ip_intra_hub <- intra_lineage %>%
 #Graph
 graph_obj <- graph_from_data_frame(ip_intra_hub, directed = FALSE)
 
-#Louvain clustering
-communities <- cluster_louvain(graph_obj)
+#Leiden clustering 
+communities <- cluster_leiden(graph_obj, 
+                              objective_function = "modularity", 
+                              weights = E(graph_obj)$weighted)
 
 #Getting the IP clusters for numerical information
 ip_clusters <- data.frame(
@@ -443,11 +445,11 @@ cluster_summary_long <- cluster_summary %>%
   )
 
 #Heatmap for 7+ protein sharing hub as above
-cluster_7_heatmap<-ggplot(cluster_summary_long, aes(x = as.factor(Cluster), y = Sub_Lineage, fill = Count)) +
+cluster_7_heatmap <- ggplot(cluster_summary_long, aes(x = as.factor(Cluster), y = Sub_Lineage, fill = Count)) +
   geom_tile() +
-  scale_fill_gradient(low = "white", high = "#440154FF") +#Colour scale
+  scale_fill_gradient(low = "white", high = "#440154FF") + #Colour scale
   labs(title = "Intra-Lineage Clusters (7+ Shared Proteins)",
-       x = "Cluster (Louvain)",
+       x = "Cluster (Leiden)", # <-- Updated Label
        y = "Sub-Lineage") +
   #Aesthetic
   theme_bw() +
@@ -464,7 +466,7 @@ cluster_7_heatmap<-ggplot(cluster_summary_long, aes(x = as.factor(Cluster), y = 
     axis.title.y = element_text(size = 10,face = "bold"),
     axis.text.x = element_text(size = 8),
     axis.title.x = element_text(size = 10,face = "bold")
-    ) 
+  ) 
 
 #Saving plot
 ggsave(

@@ -7,6 +7,7 @@ results/
 solar_chunks/
 visualisations/ip_ip/Cross_Lineage_Sankey.html
 visualisations/ip_ip/lib/
+*.zip
 
 # --- Ignore R/Project Artifacts ---
 *.RData
