@@ -18,22 +18,29 @@ Due to the sensitive nature of the dataset used throughout this pipeline, the ra
 All of the bioinformatics, computational analysis pipeline was conducted on the Computational Research, Engineering and Technology Environment (CREATE) high performance computing (HPC) [[5]](#ref5). Data, results, logs and software directories have been omitted from this GitHub repository. 
 
 
-- `data/` ->Directory containing all of the data used in the workflow. This includes a copy of the raw data originals (untouched), CSVs from linear mixed-effects model (LMM) and SOLAR-Eclipse analysis outputs.
+- `data/` 
+    - Directory containing all of the data used in the workflow. This includes a copy of the raw data originals (untouched), CSVs from linear mixed-effects model (LMM) and SOLAR-Eclipse analysis outputs.
     
-- `scripts/` ->  R scripts for performing LMM, SOLAR-Eclipse from the FDR P-value > 0.05 IP-Protein pairs, which also includes the initial creation of the Pedigree and Phenotype CSVs, and for Protein-Protein pairs.
+- `scripts/` 
+    - R scripts for performing LMM, SOLAR-Eclipse from the FDR P-value > 0.05 IP-Protein pairs, which also includes the initial creation of the Pedigree and Phenotype CSVs, and for Protein-Protein pairs.
 
 - `notebook/` -> All qmd from initial data exploration, solar filtering analysis and within trait analysis.
 
-- `Rshiny_app/` -> Rshiny dashboards curated for interactive visualisations of network graphs. These include IP-Protein and Protein-Protein SOLAR-Eclipse analysis pairs and filtered from those genetically and environmentally significant. To run the RShiny app, access to the SOLAR analysis results RData is required, which may be requested via TwinsUK [[1]](#ref1).
+- `Rshiny_app/` 
+    - Rshiny dashboards curated for interactive visualisations of network graphs. These include IP-Protein and Protein-Protein SOLAR-Eclipse analysis pairs and filtered from those genetically and environmentally significant. 
+    - To run the RShiny app, access to the SOLAR analysis results RData is required, which may be requested via TwinsUK [[1]](#ref1).
 
-- `results/` -> Contains SOLAR analysis outputs for IP-Protein pairs and Protein-Protein pairs.
+- `results/` 
+    - Contains SOLAR analysis outputs for IP-Protein pairs and Protein-Protein pairs.
 
-- `logs/`-> For SOLAR analysis output logs.
+- `logs/`
+    - For SOLAR analysis output logs.
 
-- `software/`-> Directory for the SOLAR package installation (solar-eclipse-9.0.1-static-Linux).
+- `software/`
+    - Directory for the SOLAR package installation (solar-eclipse-9.0.1-static-Linux).
 
-- `visualisations/` -> All graphical and visual outputs from analysis. Directories are sorted based on post-SOLAR filtering and within trait analyses.
-
+- `visualisations/` 
+    - All graphical and visual outputs from analysis. Directories are sorted based on post-SOLAR filtering and within trait analyses.
 
 
 ## <a id="references"></a> References

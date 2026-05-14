@@ -59,7 +59,7 @@ build_custom_legend <- function(is_genetic = TRUE) {
   )
   
   HTML(paste0(
-    '<div style="padding: 10px; background-color: #f9f9f9; border-radius: 5px; height: 710px; overflow-y: auto; border: 1px solid #ddd;">',
+    '<div style="padding: 8px; background-color: #f9f9f9; border-radius: 2px; height: 710px; overflow-y: auto; border: 1px solid #ddd;">',
     
     #Node size and centrality 
     '<h4 style="text-align: center; font-weight: bold; margin-top: 0; font-size: 20px;">Nodes & Centrality</h4>',
@@ -102,12 +102,24 @@ ui <- dashboardPage(
   dashboardHeader(title = "Protein-Protein Networks"),
   dashboardSidebar(
     sidebarMenu(
-      menuItem("Genetically Significant", tabName = "gen_pairs", icon = icon("dna")),
-      menuItem("Environmentally Significant", tabName = "env_pairs", icon = icon("leaf"))
+      menuItem("Genetic", tabName = "gen_pairs", icon = icon("dna")),
+      menuItem("Environmental", tabName = "env_pairs", icon = icon("leaf"))
     )
   ),
   
   dashboardBody(
+    tags$head(
+      tags$style(HTML("
+        .main-sidebar .sidebar .sidebar-menu a {
+          font-size: 18px;   
+          padding: 20px 15px; 
+        }
+        .main-sidebar .sidebar .sidebar-menu a i {
+          font-size: 20px;
+          margin-right: 10px;
+        }
+      "))
+    ),
     tabItems(
       #GENETICS
       tabItem(tabName = "gen_pairs",
@@ -126,7 +138,7 @@ ui <- dashboardPage(
               ),
               #Dropdowns
               fluidRow(
-                box(width = 9, status = "primary", visNetworkOutput("network_graph_gen", height = "750px")),
+                box(width = 9, status = "primary", visNetworkOutput("network_graph_gen", height = "800px")),
                 box(title = "Network Key", width = 3, status = "primary", solidHeader = TRUE, build_custom_legend(TRUE))
               )
       ),
@@ -143,7 +155,7 @@ ui <- dashboardPage(
                     hr(),
                     checkboxInput("env_dom_filter", "|ρE| ≥ 2x |ρG|", value = FALSE)),
                 
-                 box(title = "Selection:", width = 8, status = "success", solidHeader = TRUE,
+                box(title = "Selection:", width = 8, status = "success", solidHeader = TRUE,
                     fluidRow(
                       column(6, selectInput("env_mod", "Select Leiden Module:", choices = "All")),
                       column(6, selectInput("env_prot", "Select Specific Protein:", choices = "All"))
@@ -151,7 +163,7 @@ ui <- dashboardPage(
               ),
               #Dropdowns
               fluidRow(
-                box(width = 9, status = "success", visNetworkOutput("network_graph_env", height = "750px")),
+                box(width = 9, status = "success", visNetworkOutput("network_graph_env", height = "800px")),
                 box(title = "Network Key", width = 3, status = "success", solidHeader = TRUE, build_custom_legend(FALSE))
               )
       )
@@ -216,7 +228,8 @@ server <- function(input, output, session) {
       visPhysics(solver = "forceAtlas2Based", forceAtlas2Based = list(gravitationalConstant = -200, springLength = 150), stabilization = list(enabled = TRUE, iterations = 1000)) %>%
       visEvents(stabilizationIterationsDone = "function () {this.setOptions({physics: false});}") %>%
       visOptions(highlightNearest = list(enabled = TRUE, degree = 1, hover = TRUE), nodesIdSelection = list(enabled = TRUE, main = "Search by Name")) %>%
-      visEdges(smooth = list(enabled = TRUE, type = "continuous")) %>% visInteraction(navigationButtons = TRUE)
+      visEdges(smooth = list(enabled = TRUE, type = "continuous")) %>% visInteraction(navigationButtons = TRUE ) %>%
+      visExport(type = "png", name = "protein_protein_gen")
   })
   
   
@@ -232,7 +245,7 @@ server <- function(input, output, session) {
     hub_data_all <- prot_env_hits %>%
       filter(abs(rhoE) >= input$env_thresh) %>% 
       mutate(abs_rhoE = abs(rhoE), edge_sign = ifelse(rhoE >= 0, "Positive", "Negative"))
-  
+    
     if(input$env_dom_filter) {
       hub_data_all <- hub_data_all %>% 
         filter(abs_rhoE >= (2 * abs(coalesce(rhoG, 0))))
@@ -281,7 +294,8 @@ server <- function(input, output, session) {
       visPhysics(solver = "forceAtlas2Based", forceAtlas2Based = list(gravitationalConstant = -200, springLength = 150), stabilization = list(enabled = TRUE, iterations = 1000)) %>%
       visEvents(stabilizationIterationsDone = "function () {this.setOptions({physics: false});}") %>%
       visOptions(highlightNearest = list(enabled = TRUE, degree = 1, hover = TRUE), nodesIdSelection = list(enabled = TRUE, main = "Search by Name")) %>%
-      visEdges(smooth = list(enabled = TRUE, type = "continuous")) %>% visInteraction(navigationButtons = TRUE)
+      visEdges(smooth = list(enabled = TRUE, type = "continuous")) %>% visInteraction(navigationButtons = TRUE) %>%
+      visExport(type = "png", name = "protein_protein_env")
   })
   
   #Shared dropdowns/selections
@@ -348,7 +362,7 @@ server <- function(input, output, session) {
   #sumamries for modules
   output$gen_module_summary <- renderUI({
     data <- network_data_gen(); req(data); mod <- input$gen_mod
-    if(mod == "All") return(HTML("<p style='color: #555; font-style: italic;'>Select a Module to see its proteins.</p>"))
+    if(mod == "All") return(HTML("<p style='color: #555; font-style: italic;'>Select a Module for information.</p>"))
     mod_prots <- data$nodes %>% filter(module == mod) %>% arrange(desc(value)) 
     if(nrow(mod_prots) == 0) return(HTML("<p>No proteins currently in this module.</p>"))
     
@@ -362,7 +376,7 @@ server <- function(input, output, session) {
   
   output$env_module_summary <- renderUI({
     data <- network_data_env(); req(data); mod <- input$env_mod
-    if(mod == "All") return(HTML("<p style='color: #555; font-style: italic;'>Select a Module to see its proteins.</p>"))
+    if(mod == "All") return(HTML("<p style='color: #555; font-style: italic;'>Select a Module for information.</p>"))
     mod_prots <- data$nodes %>% filter(module == mod) %>% arrange(desc(value))
     if(nrow(mod_prots) == 0) return(HTML("<p>No proteins currently in this module.</p>"))
     

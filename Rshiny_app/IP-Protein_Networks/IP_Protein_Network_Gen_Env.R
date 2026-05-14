@@ -72,7 +72,7 @@ build_custom_legend <- function(is_genetic = TRUE) {
   )
   
   HTML(paste0(
-    '<div style="padding: 10px; background-color: #f9f9f9; border-radius: 5px; height: 710px; overflow-y: auto;">',
+    '<div style="padding: 8px; background-color: #f9f9f9; border-radius: 2px; height: 710px; overflow-y: auto; border: 1px solid #ddd;">',
     
     #Node 
     '<h4 style="text-align: center; font-weight: bold; margin-top: 0; font-size: 20px;">Nodes</h4>',
@@ -116,12 +116,25 @@ ui <- dashboardPage(
   
   dashboardSidebar(
     sidebarMenu(
-      menuItem("Genetically Significant", tabName = "gen_pairs", icon = icon("dna")),
-      menuItem("Environmentally Significant", tabName = "env_pairs", icon = icon("leaf"))
+      menuItem("Genetic", tabName = "gen_pairs", icon = icon("dna")),
+      menuItem("Environmental", tabName = "env_pairs", icon = icon("leaf"))
     )
   ),
   
   dashboardBody(
+    tags$head(
+      tags$style(HTML("
+        .main-sidebar .sidebar .sidebar-menu a {
+          font-size: 18px;   
+          padding: 20px 15px; 
+        }
+        .main-sidebar .sidebar .sidebar-menu a i {
+          font-size: 20px;
+          margin-right: 10px;
+        }
+      "))
+    ),
+    
     tabItems(
       #GENETICS
       tabItem(tabName = "gen_pairs",
@@ -161,60 +174,60 @@ ui <- dashboardPage(
                     htmlOutput("gen_module_summary"))
               ),
               fluidRow(
-                box(width = 9, status = "primary", visNetworkOutput("network_graph_gen", height = "750px")),
+                box(width = 9, status = "primary", visNetworkOutput("network_graph_gen", height = "800px")),
                 box(title = "Key", width = 3, status = "primary", solidHeader = TRUE, build_custom_legend(TRUE))
               )
       ),
-              
-              #ENVIRONMENTAL
-              tabItem(tabName = "env_pairs",
-                      h2("Environmentally Significant IP-Protein Pairs", align = "center"),
-                      p("Analysis based on environmental architecture (ρE). This network is based on Leiden clustering with weights using |ρE|. ForceAtlas2 is used as a force directed layout. Please bare with the time for loading graphs. For these environmentally signficant pairs, ρE FDR < 0.05 was implemented. The maximum |ρE| between a pair reached 0.45. The maximum number of proteins shared by IPs was 6.", align = "center"),
-                      fluidRow(
-                        #Sliders
-                        box(title = "Filtering:", 
-                            width = 4, 
-                            status = "success", 
-                            solidHeader = TRUE,
-                            sliderInput("env_sharing", 
-                                        "Proteins per IP:", 
-                                        min = 1, 
-                                        max = 6, 
-                                        value = 2, 
-                                        step = 1),
-                            sliderInput("env_thresh", 
-                                        "Min |ρE| Strength:", 
-                                        min = 0.0, 
-                                        max = 0.45, 
-                                        value = 0.3, 
-                                        step = 0.05)
-                        ),
-                        #Dropdowns
-                        box(title = "Selection:", 
-                            width = 8, 
-                            status = "success", 
-                            solidHeader = TRUE,
-                            fluidRow(
-                              column(4, selectInput("env_mod", "Select Leiden Module:", choices = "All")),
-                              column(4, selectInput("env_lin", "Select Immune Lineage:", choices = "All")),
-                              column(4, selectInput("env_prot", "Select Protein Hub:", choices = "All"))
-                            ),
-                            hr(),
-                            htmlOutput("env_module_summary"))
-                      ),
-                      fluidRow(
-                        box(width = 9, status = "success", visNetworkOutput("network_graph_env", height = "750px")),
-                        box(title = "Key", width = 3, status = "success", solidHeader = TRUE, build_custom_legend(FALSE))
-                      )
+      
+      #ENVIRONMENTAL
+      tabItem(tabName = "env_pairs",
+              h2("Environmentally Significant IP-Protein Pairs", align = "center"),
+              p("Analysis based on environmental architecture (ρE). This network is based on Leiden clustering with weights using |ρE|. ForceAtlas2 is used as a force directed layout. Please bare with the time for loading graphs. For these environmentally signficant pairs, ρE FDR < 0.05 was implemented. The maximum |ρE| between a pair reached 0.45. The maximum number of proteins shared by IPs was 6.", align = "center"),
+              fluidRow(
+                #Sliders
+                box(title = "Filtering:", 
+                    width = 4, 
+                    status = "success", 
+                    solidHeader = TRUE,
+                    sliderInput("env_sharing", 
+                                "Proteins per IP:", 
+                                min = 1, 
+                                max = 6, 
+                                value = 2, 
+                                step = 1),
+                    sliderInput("env_thresh", 
+                                "Min |ρE| Strength:", 
+                                min = 0.0, 
+                                max = 0.45, 
+                                value = 0.3, 
+                                step = 0.05)
+                ),
+                #Dropdowns
+                box(title = "Selection:", 
+                    width = 8, 
+                    status = "success", 
+                    solidHeader = TRUE,
+                    fluidRow(
+                      column(4, selectInput("env_mod", "Select Leiden Module:", choices = "All")),
+                      column(4, selectInput("env_lin", "Select Immune Lineage:", choices = "All")),
+                      column(4, selectInput("env_prot", "Select Protein Hub:", choices = "All"))
+                    ),
+                    hr(),
+                    htmlOutput("env_module_summary"))
+              ),
+              fluidRow(
+                box(width = 9, status = "success", visNetworkOutput("network_graph_env", height = "800px")),
+                box(title = "Key", width = 3, status = "success", solidHeader = TRUE, build_custom_legend(FALSE))
               )
+      )
     )
   )
 )
 
-                    
+
 
 #Server
-                    
+
 server <- function(input, output, session) {
   
   #REACTIVES
@@ -236,8 +249,8 @@ server <- function(input, output, session) {
       left_join(genetic_0.1_hits %>% select(trait1, Sub.Lineage) %>% distinct(trait1, .keep_all=TRUE), by = c("name" = "trait1")) %>%
       left_join(gen_module_lookup, by = "name") %>%
       mutate(type = ifelse(!is.na(Sub.Lineage), "IP", "Protein"), shape_map = ifelse(type == "Protein", "Protein", Sub.Lineage), module = ifelse(is.na(module), "Unassigned", module))
-   
-     g <- graph_from_data_frame(d = hub_data %>% 
+    
+    g <- graph_from_data_frame(d = hub_data %>% 
                                  select(trait1, trait2, rhoG, abs_rhoG, edge_sign), 
                                directed = FALSE, vertices = nodes_df)
     V(g)$module <- as.character(cluster_leiden(g, objective_function = "modularity", 
@@ -271,14 +284,15 @@ server <- function(input, output, session) {
       visOptions(highlightNearest = list(enabled = TRUE, degree = 1, hover = TRUE), 
                  nodesIdSelection = list(enabled = TRUE, main = "Search by Name", values = data$nodes %>% 
                                            arrange(desc(type == "Protein"), id) %>% pull(id))) %>%
-     
+      
       visEdges(smooth = list(enabled = TRUE, type = "continuous")) %>% 
+      visExport(type = "png", name = "IP_Protein_Gen") %>%
       visInteraction(navigationButtons = TRUE, tooltipDelay = 0)
   })
   
   
   
- #Dropdown changes based on observed
+  #Dropdown changes based on observed
   observe({
     data <- network_data_gen(); req(data)
     mod <- input$gen_mod; lin <- input$gen_lin; prot <- input$gen_prot
@@ -418,8 +432,9 @@ server <- function(input, output, session) {
                  nodesIdSelection = list(enabled = TRUE, main = "Search by Name", 
                                          values = data$nodes %>% arrange(desc(type == "Protein"), id) %>% 
                                            pull(id))) %>%
-     
+      
       visEdges(smooth = list(enabled = TRUE, type = "continuous")) %>% 
+      visExport(type = "png", name = "IP_Protein_Env") %>%
       visInteraction(navigationButtons = TRUE, tooltipDelay = 0)
   })
   
@@ -466,9 +481,9 @@ server <- function(input, output, session) {
     
     overall_lin_counts <- mod_ips %>% count(shape_map) %>% arrange(desc(n))
     overall_lin_text <- paste0(overall_lin_counts$shape_map, " (", overall_lin_counts$n, ")", collapse = ", ")
-
+    
     mod_edges <- data$edges %>% filter(from %in% mod_ips$id | to %in% mod_ips$id)
-
+    
     edge_details <- mod_edges %>%
       left_join(data$nodes %>% select(id, type, shape_map), by = c("from" = "id")) %>% rename(from_type = type, from_lineage = shape_map) %>%
       left_join(data$nodes %>% select(id, type, shape_map), by = c("to" = "id")) %>% rename(to_type = type, to_lineage = shape_map)
@@ -551,9 +566,9 @@ server <- function(input, output, session) {
 
 
 
-  
 
-  
-  
+
+
+
 #Run App
 shinyApp(ui = ui, server = server)
