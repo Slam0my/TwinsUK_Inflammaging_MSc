@@ -139,8 +139,11 @@ ui <- dashboardPage(
               fluidRow(
                 box(title = "Filtering:", width = 4, status = "success", solidHeader = TRUE,
                     sliderInput("env_sharing", "Min Connections per Protein:", min = 1, max = 15, value = 3, step = 1),
-                    sliderInput("env_thresh", "Min |ρE| Strength:", min = 0.0, max = 0.5, value = 0.4, step = 0.05)),
-                box(title = "Selection:", width = 8, status = "success", solidHeader = TRUE,
+                    sliderInput("env_thresh", "Min |ρE| Strength:", min = 0.0, max = 0.5, value = 0.4, step = 0.05),
+                    hr(),
+                    checkboxInput("env_dom_filter", "|ρE| ≥ 2x |ρG|", value = FALSE)),
+                
+                 box(title = "Selection:", width = 8, status = "success", solidHeader = TRUE,
                     fluidRow(
                       column(6, selectInput("env_mod", "Select Leiden Module:", choices = "All")),
                       column(6, selectInput("env_prot", "Select Specific Protein:", choices = "All"))
@@ -229,6 +232,12 @@ server <- function(input, output, session) {
     hub_data_all <- prot_env_hits %>%
       filter(abs(rhoE) >= input$env_thresh) %>% 
       mutate(abs_rhoE = abs(rhoE), edge_sign = ifelse(rhoE >= 0, "Positive", "Negative"))
+  
+    if(input$env_dom_filter) {
+      hub_data_all <- hub_data_all %>% 
+        filter(abs_rhoE >= (2 * abs(coalesce(rhoG, 0))))
+    }
+    
     
     if(nrow(hub_data_all) == 0) return(NULL)
     
@@ -275,7 +284,7 @@ server <- function(input, output, session) {
       visEdges(smooth = list(enabled = TRUE, type = "continuous")) %>% visInteraction(navigationButtons = TRUE)
   })
   
-  #Shared drpdowns/selections
+  #Shared dropdowns/selections
   observe({
     data_g <- network_data_gen(); req(data_g)
     mod <- input$gen_mod; prot <- input$gen_prot
