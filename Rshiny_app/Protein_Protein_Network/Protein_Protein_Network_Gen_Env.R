@@ -32,11 +32,13 @@ load("prot_prot_filtering_results.RData")
 #static for stability
 #Genetics
 g_base_gen <- graph_from_data_frame(prot_gen_0.1_hits %>% filter(abs(rhoG) >= 0.3) %>% mutate(weight = abs(rhoG)) %>% select(trait1, trait2, weight), directed = FALSE)
+set.seed(123)
 leiden_gen <- cluster_leiden(g_base_gen, objective_function = "modularity", weights = E(g_base_gen)$weight)
 gen_module_lookup <- data.frame(name = V(g_base_gen)$name, module = as.character(leiden_gen$membership))
 
 #Environmental
 g_base_env <- graph_from_data_frame(prot_env_hits %>% filter(abs(rhoE) >= 0.3) %>% mutate(weight = abs(rhoE)) %>% select(trait1, trait2, weight), directed = FALSE)
+set.seed(123)
 leiden_env <- cluster_leiden(g_base_env, objective_function = "modularity", weights = E(g_base_env)$weight)
 env_module_lookup <- data.frame(name = V(g_base_env)$name, module = as.character(leiden_env$membership))
 
@@ -77,9 +79,6 @@ build_custom_legend <- function(is_genetic = TRUE) {
     '<div style="font-size: 14px; text-align: center; margin-bottom: 15px;">',
     '<p style="margin-bottom: 10px;">Line Thickness = Correlation Strength</p>',
     '<div style="display: flex; align-items: center; justify-content: center; gap: 15px; margin-bottom: 15px;">',
-    '<div style="text-align: center;"><div style="width: 30px; height: 1px; background-color: #7d7d7d; margin: 0 auto 5px auto;"></div>Weak</div>',
-    '<div style="text-align: center;"><div style="width: 30px; height: 4px; background-color: #7d7d7d; margin: 0 auto 5px auto;"></div>Med</div>',
-    '<div style="text-align: center;"><div style="width: 30px; height: 8px; background-color: #7d7d7d; margin: 0 auto 5px auto;"></div>Strong</div>',
     '</div>',
     '<div style="margin-bottom: 8px; font-size: 15px;"><b>&mdash;&mdash;&mdash;</b> Solid: Positive (+ρ)</div>',
     '<div style="font-size: 15px;"><b>- - - -</b> Dotted: Negative (-ρ)</div>',
@@ -128,8 +127,8 @@ ui <- dashboardPage(
               #Sliders
               fluidRow(
                 box(title = "Filtering:", width = 4, status = "primary", solidHeader = TRUE,
-                    sliderInput("gen_sharing", "Min Connections per Protein:", min = 1, max = 15, value = 3, step = 1),
-                    sliderInput("gen_thresh", "Min |ρG| Strength:", min = 0.0, max = 0.9, value = 0.4, step = 0.05)),
+                    sliderInput("gen_sharing", "Min Connections per Protein:", min = 1, max = 15, value = 2, step = 1),
+                    sliderInput("gen_thresh", "Min |ρG| Strength:", min = 0.0, max = 0.9, value = 0.5, step = 0.05)),
                 box(title = "Selection:", width = 8, status = "primary", solidHeader = TRUE,
                     fluidRow(
                       column(6, selectInput("gen_mod", "Select Leiden Module:", choices = "All")),
@@ -150,8 +149,8 @@ ui <- dashboardPage(
               #Sliders
               fluidRow(
                 box(title = "Filtering:", width = 4, status = "success", solidHeader = TRUE,
-                    sliderInput("env_sharing", "Min Connections per Protein:", min = 1, max = 15, value = 3, step = 1),
-                    sliderInput("env_thresh", "Min |ρE| Strength:", min = 0.0, max = 0.5, value = 0.4, step = 0.05),
+                    sliderInput("env_sharing", "Min Connections per Protein:", min = 1, max = 15, value = 2, step = 1),
+                    sliderInput("env_thresh", "Min |ρE| Strength:", min = 0.0, max = 0.5, value = 0.425, step = 0.025),
                     hr(),
                     checkboxInput("env_dom_filter", "|ρE| ≥ 2x |ρG|", value = FALSE)),
                 
@@ -228,7 +227,9 @@ server <- function(input, output, session) {
       visPhysics(solver = "forceAtlas2Based", forceAtlas2Based = list(gravitationalConstant = -200, springLength = 150), stabilization = list(enabled = TRUE, iterations = 1000)) %>%
       visEvents(stabilizationIterationsDone = "function () {this.setOptions({physics: false});}") %>%
       visOptions(highlightNearest = list(enabled = TRUE, degree = 1, hover = TRUE), nodesIdSelection = list(enabled = TRUE, main = "Search by Name")) %>%
-      visEdges(smooth = list(enabled = TRUE, type = "continuous")) %>% visInteraction(navigationButtons = TRUE ) %>%
+      visEdges(smooth = list(enabled = TRUE, type = "continuous"),
+               scaling = list(min = 1, max = 7)) %>% 
+      visInteraction(navigationButtons = TRUE ) %>%
       visExport(type = "png", name = "protein_protein_gen")
   })
   
@@ -294,7 +295,9 @@ server <- function(input, output, session) {
       visPhysics(solver = "forceAtlas2Based", forceAtlas2Based = list(gravitationalConstant = -200, springLength = 150), stabilization = list(enabled = TRUE, iterations = 1000)) %>%
       visEvents(stabilizationIterationsDone = "function () {this.setOptions({physics: false});}") %>%
       visOptions(highlightNearest = list(enabled = TRUE, degree = 1, hover = TRUE), nodesIdSelection = list(enabled = TRUE, main = "Search by Name")) %>%
-      visEdges(smooth = list(enabled = TRUE, type = "continuous")) %>% visInteraction(navigationButtons = TRUE) %>%
+      visEdges(smooth = list(enabled = TRUE, type = "continuous"),
+               scaling = list(min = 1, max = 7)) %>% 
+      visInteraction(navigationButtons = TRUE) %>%
       visExport(type = "png", name = "protein_protein_env")
   })
   

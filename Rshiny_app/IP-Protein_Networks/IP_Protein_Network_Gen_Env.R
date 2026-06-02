@@ -38,11 +38,13 @@ global_lineage_colours <- setNames(viridis_pal(option = "viridis")(length(all_po
 #static for stability 
 #Genetic
 g_base_gen <- graph_from_data_frame(genetic_0.1_hits %>% mutate(abs_rhoG = abs(rhoG)) %>% select(trait1, trait2, abs_rhoG), directed = FALSE)
+set.seed(123)
 leiden_gen <- cluster_leiden(g_base_gen, objective_function = "modularity", weights = E(g_base_gen)$abs_rhoG)
 gen_module_lookup <- data.frame(name = V(g_base_gen)$name, module = as.character(leiden_gen$membership))
 
 #Environmental
 g_base_env <- graph_from_data_frame(environmental_hits %>% mutate(abs_rhoE = abs(rhoE)) %>% select(trait1, trait2, abs_rhoE), directed = FALSE)
+set.seed(123)
 leiden_env <- cluster_leiden(g_base_env, objective_function = "modularity", weights = E(g_base_env)$abs_rhoE)
 env_module_lookup <- data.frame(name = V(g_base_env)$name, module = as.character(leiden_env$membership))
 
@@ -87,12 +89,9 @@ build_custom_legend <- function(is_genetic = TRUE) {
     '<div style="font-size: 14px; text-align: center; margin-bottom: 15px;">',
     '<p style="margin-bottom: 10px;">Line Thickness = Correlation Strength</p>',
     '<div style="display: flex; align-items: center; justify-content: center; gap: 15px; margin-bottom: 15px;">',
-    '<div style="text-align: center;"><div style="width: 30px; height: 1px; background-color: #7d7d7d; margin: 0 auto 5px auto;"></div>Weak</div>',
-    '<div style="text-align: center;"><div style="width: 30px; height: 4px; background-color: #7d7d7d; margin: 0 auto 5px auto;"></div>Med</div>',
-    '<div style="text-align: center;"><div style="width: 30px; height: 8px; background-color: #7d7d7d; margin: 0 auto 5px auto;"></div>Strong</div>',
     '</div>',
-    '<div style="margin-bottom: 8px; font-size: 15px;"><b>&mdash;&mdash;&mdash;</b> Solid: Positive (+ρ)</div>',
-    '<div style="font-size: 15px;"><b>- - - -</b> Dotted: Negative (-ρ)</div>',
+    '<div style="margin-bottom: 8px; font-size: 15px;"><b>&mdash;</b> Solid: Positive (+ρ)</div>',
+    '<div style="font-size: 15px;"><b>- - </b> Dotted: Negative (-ρ)</div>',
     '</div><hr style="border-top: 2px solid #ddd;">',
     
     
@@ -157,9 +156,11 @@ ui <- dashboardPage(
                                 "Min |ρG| Strength:", 
                                 min = 0.0, 
                                 max = 0.8, 
-                                value = 0.3,
+                                value = 0.4,
                                 step = 0.05)
                 ),
+         
+              
                 #Dropdowns
                 box(title = "Selection:", 
                     width = 8, 
@@ -174,8 +175,15 @@ ui <- dashboardPage(
                     htmlOutput("gen_module_summary"))
               ),
               fluidRow(
-                box(width = 9, status = "primary", visNetworkOutput("network_graph_gen", height = "800px")),
-                box(title = "Key", width = 3, status = "primary", solidHeader = TRUE, build_custom_legend(TRUE))
+                box(width = 9, 
+                    status = "primary", 
+                    visNetworkOutput("network_graph_gen", 
+                                     height = "710px")),
+                box(title = "Key", 
+                    width = 3, 
+                    status = "primary", 
+                    solidHeader = TRUE, 
+                    build_custom_legend(TRUE))
               )
       ),
       
@@ -200,8 +208,9 @@ ui <- dashboardPage(
                                 min = 0.0, 
                                 max = 0.45, 
                                 value = 0.3, 
-                                step = 0.05)
-                ),
+                                step = 0.025),
+                    hr(),
+                    checkboxInput("env_dom_filter", "|ρE| ≥ 2x |ρG|", value = FALSE)),
                 #Dropdowns
                 box(title = "Selection:", 
                     width = 8, 
@@ -216,8 +225,15 @@ ui <- dashboardPage(
                     htmlOutput("env_module_summary"))
               ),
               fluidRow(
-                box(width = 9, status = "success", visNetworkOutput("network_graph_env", height = "800px")),
-                box(title = "Key", width = 3, status = "success", solidHeader = TRUE, build_custom_legend(FALSE))
+                box(width = 9, 
+                    status = "success", 
+                    visNetworkOutput("network_graph_env", 
+                                     height = "710px")),
+                box(title = "Key", 
+                    width = 3, 
+                    status = "success", 
+                    solidHeader = TRUE, 
+                    build_custom_legend(FALSE))
               )
       )
     )
@@ -235,6 +251,7 @@ server <- function(input, output, session) {
   #Reactive calculations based on input slider
   network_data_gen <- reactive({
     req(input$gen_thresh, input$gen_sharing)
+    
     hub_data <- genetic_0.1_hits %>%
       filter(abs(rhoG) >= input$gen_thresh) %>% 
       group_by(trait1) %>%
@@ -285,7 +302,8 @@ server <- function(input, output, session) {
                  nodesIdSelection = list(enabled = TRUE, main = "Search by Name", values = data$nodes %>% 
                                            arrange(desc(type == "Protein"), id) %>% pull(id))) %>%
       
-      visEdges(smooth = list(enabled = TRUE, type = "continuous")) %>% 
+      visEdges(smooth = list(enabled = TRUE, type = "continuous"),
+               scaling = list(min = 1, max = 7)) %>% 
       visExport(type = "png", name = "IP_Protein_Gen") %>%
       visInteraction(navigationButtons = TRUE, tooltipDelay = 0)
   })
@@ -386,12 +404,20 @@ server <- function(input, output, session) {
   #ENVIRONMENT NETWORK
   network_data_env <- reactive({
     req(input$env_thresh, input$env_sharing)
+    
     hub_data <- environmental_hits %>%
       filter(abs(rhoE) >= input$env_thresh) %>% 
       group_by(trait1) %>%
       filter(n() >= input$env_sharing) %>% 
       ungroup() %>%
       mutate(abs_rhoE = abs(rhoE), edge_sign = ifelse(rhoE >= 0, "Positive", "Negative"))
+    
+    if(input$env_dom_filter) {
+      hub_data<- hub_data %>% 
+        filter(abs_rhoE >= (2 * abs(coalesce(rhoG, 0))))
+    }
+    
+    
     
     if(nrow(hub_data) == 0) return(NULL) 
     
@@ -433,7 +459,8 @@ server <- function(input, output, session) {
                                          values = data$nodes %>% arrange(desc(type == "Protein"), id) %>% 
                                            pull(id))) %>%
       
-      visEdges(smooth = list(enabled = TRUE, type = "continuous")) %>% 
+      visEdges(smooth = list(enabled = TRUE, type = "continuous"),
+               scaling = list(min = 1, max = 7)) %>% 
       visExport(type = "png", name = "IP_Protein_Env") %>%
       visInteraction(navigationButtons = TRUE, tooltipDelay = 0)
   })
