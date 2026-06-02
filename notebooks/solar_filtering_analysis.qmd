@@ -34,7 +34,6 @@ library(ggraph)
 library(tidygraph)
 library(ggforce) #Circular network modules
 
-#install.packages("visNetwork")
 library(visNetwork) #interactive network
 ```
 
@@ -80,7 +79,8 @@ infoF_clean <- infoF %>%
 
 #Combining the lineage columns to the summary results dataframe
 sum_results_combined <- summary_results_fdr %>%
-  left_join(infoF_clean %>% select(SET.NAME_clean, Lineage, Sup.Lineage, Sub.Lineage), 
+  left_join(infoF_clean %>% 
+            select(SET.NAME_clean, Lineage, Sup.Lineage, Sub.Lineage, Phenotype), 
             by = c("trait1" = "SET.NAME_clean"))
 
 #Just for visuals, relabelling of default df
@@ -110,6 +110,12 @@ genetic_0.5_hits <- sum_results_combined %>%
   filter(h2r1 > 0.5 & h2r2 > 0.5 & rhoG_FDR < 0.05)
 #1068
 
+
+
+#Saving in path csv
+summary_csv_path <- "~/Twins_Project/notebooks"
+
+write.csv(genetic_0.1_hits, file = file.path(summary_csv_path, "genetic_pairs_summary.csv"), row.names = FALSE)
 ```
 
 #### Environmental hits
@@ -124,6 +130,15 @@ filter(rhoE_FDR \< 0.05)
 #Only accounting for rhoE as h2r can be low or high 
 environmental_hits <- sum_results_combined %>%
   filter(rhoE_FDR < 0.05)
+
+#Additional 2x rhoE than rhoG for pure environmental influences with no baseline genetics
+env_2x_hits<- sum_results_combined %>%
+  filter(rhoE_FDR < 0.05) %>%
+  filter(abs(rhoE) >= 2 * abs(rhoG))
+
+
+#Saving
+write.csv(env_2x_hits, file = file.path(summary_csv_path, "env_pairs_summary.csv"), row.names = FALSE)
 ```
 
 #### Both hits
@@ -160,6 +175,7 @@ gen_env_0.5 <- genetic_0.5_hits %>%
 #Environmental -> how many are genetics
 env_gen <- environmental_hits%>%
   filter(rhoG_p0<0.05)
+
 ```
 
 ### 2.5 Saving the output environment
@@ -703,6 +719,30 @@ ip_per_protein_gen <- genetic_0.1_hits%>%
   count(trait2, sort = TRUE, name = "n_IPs")
 
 print(ip_per_protein_gen)
+
+
+top_gen_proteins_table <- genetic_0.1_hits %>%
+  group_by(trait2) %>%
+  mutate(Protein_Total_Connections = n()) %>%
+  ungroup() %>%
+  group_by(trait1) %>%
+  mutate(IP_Total_Connections = n()) %>%
+  ungroup() %>%
+  select(
+    Protein = trait2,
+    Protein_Total_Connections,
+    Lineage,
+    Sup.Lineage,
+    Sub.Lineage,
+    Phenotype,
+    IP = trait1,
+    IP_Total_Connections,
+    rhoE,
+    rhoG 
+  ) %>%
+  arrange(desc(Protein_Total_Connections), Protein, Sup.Lineage, Phenotype)
+
+write.csv(top_gen_proteins_table , file = file.path(summary_csv_path, "Top_Gen_Proteins.csv"), row.names = FALSE)
 ```
 
 ```{r}
@@ -758,6 +798,30 @@ ip_gen_sharing <- genetic_0.1_hits %>%
 shared_protein_ip_gen <- table(ip_gen_sharing$protein_count)
 
 shared_protein_ip_gen
+
+#Table for top ips
+top_gen_ips_table <- genetic_0.1_hits %>%
+  group_by(trait2) %>%
+  mutate(Protein_Total_Connections = n()) %>%
+  ungroup() %>%
+  group_by(trait1) %>%
+  mutate(IP_Total_Connections = n()) %>%
+  ungroup() %>%
+  select(
+    IP = trait1,
+    IP_Total_Connections,
+    Phenotype,
+    Sup.Lineage,
+    Lineage,
+    Sub.Lineage,
+    Protein = trait2,
+    Protein_Total_Connections,
+    rhoG,
+    rhoE 
+  ) %>%
+  arrange(desc(IP_Total_Connections), IP, Protein)
+
+write.csv(top_gen_ips_table, file = file.path(summary_csv_path, "Top_Gen_IPs.csv"), row.names = FALSE)
 ```
 
 ```{r}
@@ -918,7 +982,7 @@ gen_bidirection_counts <- genetic_0.1_hits %>%
 print(gen_bidirection_counts)
 ```
 
-##### Graph
+#### Graph
 
 Graphing the bidirectionality by proportion in super lineages
 
@@ -1076,7 +1140,7 @@ lineage_vals_gen <- setNames(shape_sequence_gen, unique_lineages_gen)
 
 
 #Graph for visuals
-ggraph(hub_graph_gen, layout = "fr") +
+ggraph(hub_graph_gen, layout = "forceatlas2") +
   #Arc Edges for visuals
   geom_edge_arc(alpha = 0.5, color = "grey70", strength = 0.1) +
   #Node
@@ -1486,7 +1550,7 @@ env_bidirection<- ggplot(env_bidirection_counts,
     panel.grid.minor = element_blank()
     ) +   
   labs(title = "Directionality by Lineage",        
-       y = "Number of Significant Genetic Hits")   
+       y = "Number of Significant Environmental Hits")   
 
 
 #Saving plot 
@@ -1825,7 +1889,627 @@ draw(env_heatmap, column_title = "Environmental Architecture of IP-Protein Pairs
 
 ```
 
-## 8. Both Genetic and Environmentally Correlated
+## 8. Environmental 2x
+
+For isolating pure environmental pairs without the influence of genetic baselines. A filtering of \|rhoE\| 2x \|rhoG\| was applied.
+
+### 8.1 Summary IP to Protein
+
+```{r}
+env_2x_hits %>%
+  summarise(
+    total_rows = n(),
+    unique_IPs = n_distinct(trait1),
+    unique_proteins = n_distinct(trait2)
+  )
+
+```
+
+```{r}
+env_2x_hits %>%
+  summarise (
+    mean_h2r1 = mean(h2r1),
+    sd_h2r1   = sd(h2r1),
+    max_h2r1 = max(h2r1),
+    mean_h2r2 = mean(h2r2),
+    sd_h2r2= sd(h2r2),
+    max_h2r2 = max(h2r2),
+    mean_rhoG = mean(abs(rhoG)),
+    sd_rhoG= sd(abs(rhoG)),
+    mean_rhoE = mean(abs(rhoE)),
+    sd_rhoE= sd(abs(rhoE))
+  )
+```
+
+### 8.2 Protein Distribution
+
+```{r}
+ip_per_protein_env_2 <- env_2x_hits %>%   
+  distinct(trait1, trait2) %>% #Should be unique but sanity checks   
+  count(trait2, sort = TRUE, name = "n_IPs")  
+
+print(ip_per_protein_env_2)
+
+
+#Table of top proteins and IPs connected
+top_env_2x_proteins_table <- env_2x_hits %>%
+  group_by(trait2) %>%
+  mutate(Protein_Total_Connections = n()) %>%
+  ungroup() %>%
+  group_by(trait1) %>%
+  mutate(IP_Total_Connections = n()) %>%
+  ungroup() %>%
+  select(
+    Protein = trait2,
+    Protein_Total_Connections,
+    Lineage,
+    Sup.Lineage,
+    Sub.Lineage,
+    Phenotype,
+    IP = trait1,
+    IP_Total_Connections,
+    rhoE,
+    rhoG 
+  ) %>%
+  arrange(desc(Protein_Total_Connections), Protein, Sup.Lineage, Phenotype)
+
+write.csv(top_env_2x_proteins, file = file.path(summary_csv_path, "Top_Env_2x_Proteins.csv"), row.names = FALSE)
+```
+
+```{r}
+env2_top15_prot <- ip_per_protein_env_2 %>%   
+  slice_max(n_IPs, n = 15, with_ties = FALSE) %>%   
+  ggplot(aes(x = reorder(trait2, n_IPs), y = n_IPs)) +   geom_col(aes(fill = n_IPs), 
+                                                                  alpha = 0.8, color = "white", 
+                                                                  linewidth = 0.3) +    #Numerical values next to bar 
+  geom_text(aes(label = n_IPs), hjust = -0.2, size =3, color = "black", fontface = "bold")+   
+  #Colour scheme   
+  scale_fill_viridis_c(option = "viridis")+   
+  #Axis   
+  coord_flip() +   
+  scale_y_continuous(limits = c(0, 500),                    expand = expansion(mult = c(0, 0.1)))+   
+  #Labelling   
+  labs(title = "Top 15 Proteins by Number of IP Connections",        
+       x = "Protein",
+       y = "Number of IPs ") +   
+  theme_minimal() +   
+  theme(     
+    axis.text.y = element_text(size = 10),          
+    axis.title.y = element_text(size = 12,face = "bold"),           axis.text.x = element_text(size = 10),     
+    axis.title.x = element_text(size = 12,face = "bold"), 
+    plot.title = element_text(size = 14, face = "bold",hjust = 0.5, margin = margin(b = 10)),     
+    legend.position = "none",     
+    axis.line = element_line(color = "black"),    
+    panel.grid.major.y = element_blank() #No vertical lines   
+    )  
+
+#Saving plot 
+ggsave(   
+  filename = "environmental_hits/2Env_Top_15_Protein_Distribution.png",
+  plot = env2_top15_prot,
+  path = output_path,   
+  width = 10,        
+  height = 8 )
+```
+
+### 8.3 IP Shared Protein Distribution
+
+```{r}
+#Counting how many share proteins 
+ip_env2_sharing <- env_2x_hits %>%   
+  group_by(trait1) %>%   
+  summarise(protein_count = n()) %>%   
+  arrange(desc(protein_count))
+
+#Table 
+shared_protein_ip_env2 <- table(ip_env2_sharing$protein_count) 
+
+
+shared_protein_ip_env2
+
+
+#Table for top ips
+top_env2_ips_table <- env_2x_hits %>%
+  group_by(trait2) %>%
+  mutate(Protein_Total_Connections = n()) %>%
+  ungroup() %>%
+  group_by(trait1) %>%
+  mutate(IP_Total_Connections = n()) %>%
+  ungroup() %>%
+  select(
+    IP = trait1,
+    IP_Total_Connections,
+    Phenotype,
+    Sup.Lineage,
+    Lineage,
+    Sub.Lineage,
+    Protein = trait2,
+    Protein_Total_Connections,
+    rhoG,
+    rhoE 
+  ) %>%
+  arrange(desc(IP_Total_Connections), IP, Protein)
+
+write.csv(top_env2_ips_table, file = file.path(summary_csv_path, "Top_Env_2x_IPs.csv"), row.names = FALSE)
+```
+
+```{r}
+#DF conversion of the table 
+ip_shared_prot_df_env2 <- as.data.frame(shared_protein_ip_env2)
+colnames(ip_shared_prot_df_env2 ) <- c("Num_Proteins", "Count_IPs")   
+
+ip_shared_prot_plot_env2 <- ggplot(ip_shared_prot_df_env2, 
+                                  aes(x = Num_Proteins, y = Count_IPs)) +  
+  geom_col(aes(fill = Count_IPs), 
+           alpha = 0.8, color = "white",
+           linewidth = 0.3) +    
+  #Numerical values next to bar   
+  geom_text(aes(label = Count_IPs), hjust = -0.2, size =3, color = "black", fontface = "bold")+   
+  #Colour scheme   
+  scale_fill_viridis_c(option = "viridis")+   
+  #Axis   
+  coord_flip() +    
+  labs(title = "Protein Connectivity to IP Distribution",        
+       x = "Number of Proteins Connected to a Single IP", y = "Number of IPs ") +  
+  theme_minimal() +   
+  theme(     
+    axis.text.y = element_text(size = 8),          
+    axis.title.y = element_text(size = 10,face = "bold"),     
+    axis.text.x = element_text(size = 8),     
+    axis.title.x = element_text(size = 10,face = "bold"),     
+    plot.title = element_text(size = 12, face = "bold",hjust = 0.5, margin = margin(b = 10)),     
+    legend.position = "none",     
+    axis.line = element_line(color = "black"),     
+    panel.grid.major.y = element_blank() #No vertical lines   
+    )  
+
+plot(ip_shared_prot_plot_env2) 
+
+
+#Saving plot 
+ggsave(   
+  filename = "environmental_hits/2Env_IP_Prot_Distribution.png",    
+  plot = ip_shared_prot_plot_env2,
+  path = output_path,   
+  width = 10,        
+  height = 8 )
+```
+
+### 8.4 Lineage Distribution
+
+```{r}
+#Lineage count
+env_2x_hits %>%
+  count(Lineage, sort = TRUE)
+
+#Sup lineage 
+env_2x_hits  %>%
+  group_by(Sup.Lineage) %>%
+  summarise(unique_ip_count = n_distinct(trait1)) %>%
+  arrange(desc(unique_ip_count))
+```
+
+### 8.5 Bidirectionality
+
+#### Overall
+
+```{r}
+env_2x_hits %>%   
+  mutate(Direction = if_else(rhoE < 0, "Negative (-)", "Positive (+)")) %>%   
+  count(Direction)
+```
+
+Obtaining the mean rhoG for both directions
+
+```{r}
+env_2x_hits %>%
+  mutate(direction = ifelse(rhoE > 0, "Positive", "Negative")) %>%
+  group_by(direction) %>%
+  summarise(
+    count = n(),
+    mean_rhoE = mean(rhoE, na.rm = TRUE),
+    sd_rhoE = sd(rhoE, na.rm = TRUE)
+  )
+```
+
+#### Per Lineage
+
+```{r}
+#count per lineage 
+env2_bidirection_counts <-  env_2x_hits %>%   
+  mutate(Direction = if_else(rhoE < 0, "Negative (-)", "Positive (+)")) %>%   
+  count(Direction, Sup.Lineage)  
+
+print(env2_bidirection_counts)
+```
+
+#### Graph
+
+Graphing the bidirectionality by proportion in super lineages
+
+```{r}
+env2_bidirection<- ggplot(env2_bidirection_counts, 
+       aes(x = Direction, y = n, fill = Direction)) +   
+  geom_col() +   
+  geom_text(aes(label = n), vjust = -0.5, size = 3,color = "black", fontface = "bold") +   
+  facet_wrap(~Sup.Lineage, scales = "free_y") +   
+  scale_y_continuous(expand = expansion(mult = c(0, 0.2))) +   
+  scale_fill_manual(values = c("Positive (+)" = "#21908CFF", "Negative (-)" = "#440154FF")) +   
+  theme_bw() +     
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 14, margin = margin(b = 10)),  
+    legend.position = c(0.85, 0.2), #Positioned in empty space       
+    legend.text = element_text(size = 12),       
+    legend.title = element_text(size = 12, face = "bold"),       
+    legend.key.size = unit(1.2, "cm"),       
+    legend.key.width = unit(1, "cm"),       
+    strip.background = element_rect(fill = "white"),        
+    strip.text = element_text(face = "bold"),       
+    axis.title.y = element_text(size = 12,face = "bold"),      
+    axis.title.x = element_text(size = 12,face = "bold"),   
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank()
+    ) +   
+  labs(title = "Directionality by Lineage",        
+       y = "Number of Significant Environmental Hits (|ρE|2x|ρG|)")   
+
+
+#Saving plot 
+ggsave(   
+  filename = "environmental_hits/2Env_Direction_Lineage.png",
+  plot = env2_bidirection,
+  path = output_path,   
+  width = 12,        
+  height = 8 )
+```
+
+### Paneling
+
+```{r}
+env2_panels <-  (env2_bidirection) /(env2_top15_prot + ip_shared_prot_plot_env2)+
+    plot_layout(heights = c(1, 1))
+
+env2_panels <- env2_bidirection + env2_top15_prot + ip_shared_prot_plot_env2 +
+  
+  
+   plot_layout(design = spacer) +
+  
+  plot_annotation(  
+    tag_levels = 'A'
+  ) &
+  theme(
+    plot.title = element_text(size = 20, face = "bold", hjust = 0.5),
+    plot.tag.position = c(0.08, 0.99),
+    plot.tag = element_text(size = 18, face = "bold"))
+
+
+ggsave(
+  filename = "environmental_hits/2Environmental_Panels.png",
+  plot = env2_panels,
+  path = output_path,
+  width = 20,
+  height = 18
+)
+```
+
+### 8.6 Network graph with the Hubs
+
+To visualise hubs and IP - Protein connections, can filter how many hubs we want in the network graph.
+
+```{r}
+#Lookup data  
+lineage_info_env2<- env_2x_hits %>%   
+  select(trait1, Sub.Lineage) %>%   
+  distinct(trait1, .keep_all = TRUE)  
+
+#defining hub list  
+hub_data_env2 <- env_2x_hits %>%   
+  group_by(trait1) %>%   
+  filter(n() >= 4) %>% #Select the number of Hubs +    
+  mutate(n_count = n()) %>%   
+  ungroup()%>%   
+  select(trait1, trait2, Sub.Lineage, n_count) 
+```
+
+```{r}
+#Graphing 
+#Building the node lists  
+hub_nodes_env2 <- data.frame(   
+  name = unique(c(hub_data_env2$trait1, hub_data_env2$trait2))) %>%   
+  #Counting how many times IPs share a protein for the hubs   
+  left_join(hub_data_env2 %>%    
+              distinct(trait1, n_count) %>%    
+              rename(name = trait1, count = n_count), by = "name") %>%   
+  #Categorising   
+  mutate(type = ifelse(is.na(count), "Protein", "IP"),   
+         colour_group = ifelse(type == "Protein", "Protein", paste(count, "Proteins"))) %>%   
+  #Adding lineage info   
+  left_join(lineage_info_env2, by = c("name" = "trait1")) %>%   
+  mutate(shape_map = ifelse(type == "Protein", "Protein", Sub.Lineage))  
+
+#Number of unique lineages 
+unique(hub_nodes_env2$shape_map)
+```
+
+```{r}
+#Network Graph  
+#Combining the edges and nodes 
+hub_graph_env2 <- graph_from_data_frame(hub_data_env2 %>% 
+                                         select(trait1, trait2), directed = FALSE, vertices = hub_nodes_env2)  
+
+#Assigning colours to them  
+#Need automated colour and shapes for IPs but keep protein the same
+hub_nodes_env2$colour_group <- factor(hub_nodes_env2$colour_group,levels = c("Protein", sort(unique(hub_nodes_env2$colour_group[hub_nodes_env2$colour_group != "Protein"])))) 
+
+#Unique  
+unique_conn_env2 <- sort(unique(hub_nodes_env2$colour_group[hub_nodes_env2$colour_group != "Protein"])) 
+
+#Final colours for each + black for protein 
+final_colours_env2 <- c("Protein" = "black", setNames(viridis_pal(option = "viridis")(length(unique_conn_env2)), unique_conn_env2)) 
+
+#Shape for aesthetics 
+lineage_vals_env2 <- c(
+  "Protein"                = 17, #Triangle
+  "Monocytes"              = 16, #Circle
+  "B cells/D"              = 15  #Diamond
+)
+
+
+
+#Graph for visuals 
+ggraph(hub_graph_env2, layout = "fr") +   
+  #Arc Edges for visuals   
+  geom_edge_arc(alpha = 0.5, color = "grey70", strength = 0.1) +   
+  #Node   
+  geom_node_point(aes(color = colour_group,                        
+                      shape = shape_map),                    
+                  size = 4,                   
+                  alpha = 0.9) +   
+  #Label  
+  geom_node_text(aes(label = name,                  
+                     filter = type == "Protein"),                 
+                 repel = TRUE,                   
+                 size = 3,                  
+                 fontface ="bold",                  
+                 box.padding = 0.5,                  
+                 point.padding = 0.5)+   
+  #Colours   
+  scale_color_manual(values = final_colours_env2,breaks = unique_conn_env2 
+  ) + 
+  #Size based on hub   
+  scale_shape_manual(values = lineage_vals_env2) + 
+  #Aesthetic theme   
+  theme_void() +   
+  theme(      
+    plot.background = element_rect(fill = "white", color = NA), 
+    panel.background = element_rect(fill = "white", color = NA),     plot.title = element_text(hjust = 0.5,face = "bold", size = 14),      
+    plot.subtitle = element_text(hjust = 0.5, size = 11),      
+    #space for legend      
+    plot.margin = margin(t = 10, r = 10, b = 10, l = 10, unit = "pt"),      
+    legend.position = "right",     
+    legend.box = "vertical",      
+    legend.text = element_text(size = 10),   
+    legend.title = element_text(size = 10, face = "bold"))+   
+  labs(title = "Network of Environmentally Significant Hubs (|ρE|2x|ρG|)",   
+       color = "IP Hub Connectivity",       
+       shape = "Lineages by Shape") +   
+  guides(edge_width = "none")  
+
+#Saving plot 
+ggsave(   
+  filename = "environmental_hits/2Env_Network_Hub.png",    
+  path = output_path,   
+  width = 12,        
+  height = 8 )
+```
+
+### 8.7 Static IP-Protein Network Graph
+
+```{r}
+#Filterings thresholds
+rho_threshold <- 0.3     
+protein_sharing <- 2     
+
+lineage_info_env2 <- env_2x_hits %>%
+  select(trait1, Sub.Lineage) %>%
+  distinct(trait1, .keep_all = TRUE)
+
+#FILTERING
+hub_data_env2 <-  env_2x_hits %>%
+  filter(abs(rhoE) >= rho_threshold) %>% 
+  group_by(trait1) %>%
+  filter(n() >= protein_sharing) %>% 
+  mutate(n_count = n()) %>%
+  ungroup() %>%
+  mutate(
+    abs_rhoE = abs(rhoE),
+    edge_sign = ifelse(rhoE >= 0, "Positive", "Negative") 
+  )
+
+#Nodes
+hub_nodes_env2 <- data.frame(
+  name = unique(c(hub_data_env2$trait1, hub_data_env2$trait2))
+) %>%
+  left_join(lineage_info_env2, by = c("name" = "trait1")) %>%
+  mutate(
+    type = ifelse(name %in% lineage_info_env2$trait1, "IP", "Protein"),
+    shape_map = ifelse(type == "Protein", "Protein", Sub.Lineage)
+  )
+
+#Edges
+edge_data_env2 <- hub_data_env2 %>% select(trait1, trait2, rhoE, abs_rhoE, edge_sign)
+
+hub_graph_env2 <- graph_from_data_frame(
+  d = edge_data_env2, 
+  directed = FALSE, 
+  vertices = hub_nodes_env2
+)
+
+#Leiden Clustering
+#|rhoE| as weights
+leiden_clusters_env2 <- cluster_leiden(
+  hub_graph_env2, 
+  objective_function = "modularity", 
+  weights = E(hub_graph_env2)$abs_rhoE
+)
+
+V(hub_graph_env2)$module <- as.character(leiden_clusters_env2$membership)
+
+#IPs are coloured by modules, proteins remain
+V(hub_graph_env2)$colour_group <- ifelse(
+  V(hub_graph_env2)$type == "Protein", 
+  "Protein", 
+  paste("Module", V(hub_graph_env2)$module)
+)
+
+graph_nodes_env2 <- igraph::as_data_frame(hub_graph_env2, what = "vertices")
+
+#Colours, shapes, lines
+unique_modules_env2 <- sort(unique(graph_nodes_env2$colour_group[graph_nodes_env2$colour_group != "Protein"]))
+
+final_colours_env2 <- c(
+  "Protein" = "black", 
+  setNames(viridis_pal(option = "viridis")(length(unique_modules_env2)), unique_modules_env2)
+)
+
+# Shapes - keep proteins same, IPs shapes for lineage
+unique_lineages_env2 <- sort(unique(graph_nodes_env2$shape_map[graph_nodes_env2$shape_map != "Protein"]))
+
+shape_sequence_env2 <- seq(from = 15, length.out = length(unique_lineages_env2)) 
+lineage_vals_env2 <- setNames(shape_sequence_env2, unique_lineages_env2)
+#protein shape is dot
+lineage_vals_env2["Protein"] <- 20 
+
+#Lines
+edge_line_vals2 <- c("Positive" = "solid", "Negative" = "dotted")
+
+#Graphing
+# Fruchterman-Reingold (FR) layout 
+ggraph(hub_graph_env2, layout = "fr", weights = abs_rhoE) +
+  #Edges
+  geom_edge_arc(
+    aes(edge_linetype = edge_sign), 
+    alpha = 0.5, 
+    color = "grey60", 
+    strength = 0.1
+  ) +
+  scale_edge_linetype_manual(values = edge_line_vals2) +
+  
+  #Nodes - module as colours, shapes as lineage
+  geom_node_point(
+    aes(color = colour_group, shape = shape_map), 
+    size = 4,
+    alpha = 0.9
+  ) +
+  
+  #Labelling - only proteins
+  geom_node_text(
+    aes(label = name, filter = type == "Protein"),
+    repel = TRUE, 
+    size = 3,
+    fontface = "bold",
+    box.padding = 0.4,
+    point.padding = 0.4
+  ) +
+  
+  scale_color_manual(values = final_colours_env2, breaks = unique_modules_env2) + 
+  scale_shape_manual(values = lineage_vals_env2) +
+  
+  #Aesthetics
+  theme_void() +
+  theme(
+     plot.background = element_rect(fill = "white", color = NA),
+     panel.background = element_rect(fill = "white", color = NA),
+     plot.title = element_text(hjust = 0.5, face = "bold", size = 14),
+     plot.subtitle = element_text(hjust = 0.5, size = 11),
+     plot.margin = margin(t = 10, r = 10, b = 10, l = 10, unit = "pt"),
+     legend.position = "right",
+     legend.box = "vertical",
+     legend.text = element_text(size = 10),
+     legend.title = element_text(size = 10, face = "bold")
+  ) +
+  labs(
+    title = "Network of Environmentally Significant Hubs (Leiden Clustered)",   
+    subtitle = paste0("Based on Leiden clustering. Filtered for |ρE| >0.3 and IPs associated to more than one protein. Fruchterman-Reingold (FR) layout was used ", protein_sharing, " proteins. FR layout."),
+    color = "Leiden Modules",
+    shape = "Lineages by Shape",
+    edge_linetype = "rhoE Direction"
+  ) +
+  guides(edge_width = "none")
+
+#Saving
+ggsave(
+  filename = "environmental_hits/2Static_Env_IP_Protein_Network_Hubs.png", 
+  path = output_path, 
+  width = 20,     
+  height = 15
+)
+```
+
+### 8.8 Heatmap
+
+```{r}
+environmental2_matrix <- conv_matrix (env_2x_hits, "rhoE")
+
+ip_names_env2 <- colnames(t(environmental2_matrix))
+
+anno_env2 <- env_2x_hits %>%
+  select(trait1, Lineage) %>%
+  distinct() %>%
+  filter(trait1 %in% ip_names_env2) %>%
+  column_to_rownames("trait1")
+
+lineage_env2 <- anno_env2$Lineage
+
+col_env = colorRamp2(c(-0.6, 0, 0.6), 
+                         c("#440154FF", "#e8e8e8", "#21908CFF"))
+
+env_heatmap <- Heatmap(t(environmental2_matrix), 
+          name = "ρE", 
+          col = col_env,
+          column_split = lineage_env,
+          column_title_side = "bottom",
+          column_title_gp = gpar(fontsize = 8, fontface = "bold"),
+          column_title_rot = 90,
+          cluster_rows = TRUE,
+          cluster_columns = TRUE,
+          show_column_dend = FALSE,
+          show_column_names = FALSE,
+          show_row_names = TRUE,
+          row_names_gp = gpar(fontsize = 8),
+          na_col = "grey90",
+          border = FALSE)
+
+draw(env_heatmap, column_title = "Environmental Architecture of IP-Protein Pairs")
+```
+
+### 8.9 Combined Env Panel
+
+```{r}
+top_half_env <- (env_bidirection) / (env_top15_prot | ip_shared_prot_plot_env)
+
+bottom_half_env <- (env2_bidirection) / (env2_top15_prot | ip_shared_prot_plot_env2)
+
+combined_env_panels <- (env_panels) / (env2_panels) +
+  plot_annotation(  
+    tag_levels = 'A' 
+  ) &
+  theme(
+    plot.title = element_text(size = 20, face = "bold", hjust = 0.5),
+    plot.tag.position = c(0.02, 0.99), # Shifted slightly left so tags don't overlap titles
+    plot.tag = element_text(size = 22, face = "bold")
+  )
+
+ggsave(
+  filename = "environmental_hits/Combined_Env_Figure.png",
+  plot = combined_env_panels,
+  path = output_path,
+  width = 20,
+  height = 30
+)
+```
+
+## 9. Both Genetic and Environmentally Correlated
 
 All hits are positive. Only CXCL9 protein has IP associations.
 
@@ -1833,7 +2517,7 @@ Overall CXCL9 had the phenotype pP correlation.
 
 Deriving from genetic pG and environmental pE but rhoG is stronger/more dominant than rhoE.
 
-### 8.1 Summary IP to Protein
+### 9.1 Summary IP to Protein
 
 ```{r}
 both_hits %>%
@@ -1861,7 +2545,7 @@ both_hits %>%
   )
 ```
 
-### 8.3 Lineage
+### 9.3 Lineage
 
 ```{r}
 both_hits %>%   
@@ -1873,7 +2557,7 @@ both_hits %>%
   arrange(desc(n_IPs))
 ```
 
-### 8.5 Bidirectionality
+### 9.4 Bidirectionality
 
 ```{r}
 both_hits %>%
@@ -1881,7 +2565,7 @@ both_hits %>%
   count(Direction)
 ```
 
-### 8.6 Graph
+### 9.5 Graph
 
 ```{r}
 #Plotting with different graph
@@ -1959,9 +2643,9 @@ print(stats_rhoE$sd)
 
 CXCL9 more genetically correlated than environmental counterpart though both significant. Heterogeneity of immune cell influence. MEAN and SD purely for trend, no biological context. Effect size are significantly higher in genetic than environmental . They are all from CD8 T cell lineage.
 
-## 9. Genetic -\> Environmental
+## 10. Genetic -\> Environmental
 
-### 9.1 Summary IP to Protein
+### 10.1 Summary IP to Protein
 
 Number of IPs and Proteins
 
@@ -1992,7 +2676,7 @@ gen_env_0.1 %>%
 
 ```
 
-### 9.2 Protein Distribution
+### 10.2 Protein Distribution
 
 ```{r}
 ip_per_protein_gen_env <- gen_env_0.1%>%
@@ -2011,7 +2695,7 @@ gen_env_0.1 %>%
   distinct()
 ```
 
-### 9.3 IP Shared Protein Distribution
+### 10.3 IP Shared Protein Distribution
 
 ```{r}
 #Counting how many share proteins
@@ -2036,7 +2720,7 @@ gen_env_0.1 %>%
   ungroup()
 ```
 
-### 9.4 Lineage
+### 10.4 Lineage
 
 ```{r}
 gen_env_0.1 %>%
@@ -2048,7 +2732,7 @@ gen_env_0.1 %>%
   arrange(desc(n_IPs))
 ```
 
-### 9.5 Bidirectionality
+### 10.5 Bidirectionality
 
 ```{r}
 gen_env_0.1 %>%
@@ -2063,7 +2747,7 @@ gen_env_0.1 %>%
 
 ```
 
-### 9.6 Summary Graph
+### 10.6 Summary Graph
 
 ```{r}
 #Add in direction
@@ -2117,7 +2801,7 @@ ggsave(
 )
 ```
 
-### 9.7 Heatmap
+### 10.7 Heatmap
 
 ```{r}
 gen_env_matrix <- conv_matrix (gen_env_0.1, "rhoE")
@@ -2158,7 +2842,7 @@ draw(gen_env_heatmap,
 
 ```
 
-### 9.8 Plot Graph
+### 10.8 Plot Graph
 
 ```{r}
 ggplot(gen_env_0.1, aes(x = rhoE, y = rhoG, color = trait2)) +
@@ -2176,9 +2860,9 @@ ggplot(gen_env_0.1, aes(x = rhoE, y = rhoG, color = trait2)) +
   )
 ```
 
-## 10. Environmental -\> Genetic
+## 11. Environmental -\> Genetic
 
-### 10.1 Summary IP to Protein
+### 11.1 Summary IP to Protein
 
 ```{r}
 env_gen %>%
@@ -2205,7 +2889,7 @@ env_gen  %>%
   )
 ```
 
-### 10.2 Protein Distribution
+### 11.2 Protein Distribution
 
 ```{r}
 ip_per_protein_env_gen <- env_gen%>%   
@@ -2215,7 +2899,7 @@ ip_per_protein_env_gen <- env_gen%>%
 print(ip_per_protein_env_gen)
 ```
 
-### 10.3 IP Shared Protein Distribution
+### 11.3 IP Shared Protein Distribution
 
 ```{r}
 #Counting how many share proteins 
@@ -2242,7 +2926,7 @@ env_gen%>%
 
 All monocytes
 
-### 10.4 Lineage
+### 11.4 Lineage
 
 ```{r}
 env_gen %>%   
@@ -2254,7 +2938,7 @@ env_gen %>%
   arrange(desc(n_IPs))
 ```
 
-### 10.5 Bidirectionality
+### 11.5 Bidirectionality
 
 ```{r}
 env_gen %>%   
@@ -2269,7 +2953,7 @@ env_gen %>%
   count(Direction, Sup.Lineage, trait2)   
 ```
 
-### 10.6 Summary Graph
+### 11.6 Summary Graph
 
 ```{r}
 #All positive
@@ -2312,7 +2996,7 @@ ggsave(
   height = 8 )
 ```
 
-### 10.7 Heatmap
+### 11.7 Heatmap
 
 ```{r}
 env_gen_matrix <- conv_matrix(env_gen, "rhoE")
@@ -2353,7 +3037,7 @@ draw(env_gen_heatmap,
 
 All positive correlations, few overlaps.
 
-### 10.8 Plot Graph
+### 11.8 Plot Graph
 
 ```{r}
 ggplot(env_gen, aes(x = rhoE, y = rhoG, color = trait2)) +
