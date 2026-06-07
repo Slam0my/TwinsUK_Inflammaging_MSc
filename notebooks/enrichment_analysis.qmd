@@ -1,0 +1,136 @@
+---
+title: "Enrichment_Analysis"
+format: html
+editor: visual
+---
+
+# Enrichment Analysis
+
+Idnetifying enrichment or depletion in the Genetic and Environmental filtered dataset to determine statistical outcomes. Using Fisher's exact test enables two sided (enriched or deleted) assessment for lineages of IPs
+
+## 1. Set up
+
+### 1.1 Load libraries
+
+```{r, message=FALSE}
+library(dplyr)
+```
+
+### 1.2 Loading Data
+
+```{r, message=FALSE}
+load("solar_analysis_filtering_results.RData")
+```
+
+### 1.3 Output path
+
+```{r}
+output_path <- "~/Twins_Project/notebooks"
+```
+
+## 2 IP info
+
+Obtaining sup and sub lineages for information in each subset
+
+```{r}
+#Get all IPs from data
+all_background_ips <- sum_results_combined %>% 
+  distinct(trait1, Sup.Lineage, Sub.Lineage)
+
+#Get IPs from each
+gen_hit_ips <- genetic_0.1_hits %>% distinct(trait1) %>% pull(trait1)
+env_hit_ips <- env_2x_hits %>% distinct(trait1) %>% pull(trait1)
+
+```
+
+## 3 Fishers
+
+Creating a function to build the matrix for both. FDR also applied.
+
+```{r}
+run_enrichment <- function(hit_list, background_df, target_column) {
+  
+  results <- lapply(unique(background_df[[target_column]]), function(lineage) {
+    if(is.na(lineage)) return(NULL) 
+    
+    #Building 2x2 matrix
+    
+    #Number of IPs in gen/env
+    in_hits_is_lin     <- sum(background_df$trait1 %in% hit_list & background_df[[target_column]] == lineage)
+    
+    in_hits_NOT_lin    <- sum(background_df$trait1 %in% hit_list & background_df[[target_column]] != lineage)
+    
+    #Ips that didnt make it into gen/env from total
+    NOT_hits_is_lin    <- sum(!(background_df$trait1 %in% hit_list) & background_df[[target_column]] == lineage)
+    
+    NOT_hits_NOT_lin   <- sum(!(background_df$trait1 %in% hit_list) & background_df[[target_column]] != lineage)
+    
+    #Table/matrix comparison
+    contingency_matrix <- matrix(c(in_hits_is_lin, in_hits_NOT_lin, 
+                                   NOT_hits_is_lin, NOT_hits_NOT_lin), nrow = 2)
+    
+    #Run two sided test
+    test <- fisher.test(contingency_matrix)
+    
+    #Creating the df
+    data.frame(
+      Sup_or_Sub = target_column, #For sub and sup identification
+      Lineage = lineage,
+      Hits_Count = in_hits_is_lin,
+      Total_in_all_results = in_hits_is_lin + NOT_hits_is_lin,
+      Odds_Ratio = test$estimate,
+      P_Value = test$p.value
+    )
+  })
+  
+  #Apply FDR 
+  final_table <- bind_rows(results) %>%
+    mutate(FDR = p.adjust(P_Value, method = "fdr")) %>%
+    mutate(Status = case_when(
+      FDR < 0.05 & Odds_Ratio > 1 ~ "Enriched",
+      FDR < 0.05 & Odds_Ratio < 1 ~ "Depleted",
+      TRUE ~ "Not Significant"
+    )) %>%
+    arrange(Sup_or_Sub, FDR)
+  
+  return(final_table)
+}
+```
+
+## 4 Output
+
+### Genetic
+
+```{r}
+gen_sup_enrichment <- run_enrichment(gen_hit_ips, all_background_ips, "Sup.Lineage")
+gen_sub_enrichment <- run_enrichment(gen_hit_ips, all_background_ips, "Sub.Lineage")
+
+#Bind Sup and sub lineages
+genetic_enrichment_results <- bind_rows(gen_sup_enrichment, gen_sub_enrichment)
+print(genetic_enrichment_results)
+
+
+```
+
+```{r}
+write.csv(genetic_enrichment_results, file = file.path(output_path, "gen_ip_lin_enrichment.csv"), row.names = FALSE)
+
+```
+
+### Environmental
+
+```{r}
+env_sup_enrichment <- run_enrichment(env_hit_ips, all_background_ips, "Sup.Lineage")
+env_sub_enrichment <- run_enrichment(env_hit_ips, all_background_ips, "Sub.Lineage")
+
+
+#Bind Sup and sub lineages
+environmental_enrichment_results <- bind_rows(env_sup_enrichment, env_sub_enrichment)
+print(environmental_enrichment_results)
+
+
+```
+
+```{r}
+write.csv(environmental_enrichment_results, file = file.path(output_path, "env_2x_ip_lin_enrichment.csv"), row.names = FALSE)
+```

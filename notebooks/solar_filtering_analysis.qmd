@@ -205,10 +205,10 @@ rhoP_plot<- ggplot(sum_results_combined, aes(x = rhoP)) +
   #Aesthetics
  theme_minimal() +
   theme(
-    axis.text.y = element_text(size = 10),     
-    axis.title.y = element_text(size = 12,face = "bold"),
-    axis.text.x = element_text(size = 10),
-    axis.title.x = element_text(size = 12,face = "bold"),
+    axis.text.y = element_text(size = 14),     
+    axis.title.y = element_text(size = 15,face = "bold"),
+    axis.text.x = element_text(size = 14),
+    axis.title.x = element_text(size = 16,face = "bold"),
     plot.title = element_text(size = 16, face = "bold",hjust = 0.5, margin = margin(b = 10)),
     plot.title.position = "plot",
     legend.position = "none",
@@ -271,10 +271,10 @@ ip_per_protein %>%
        x = "Protein", y = "Number of IPs ") +
   theme_minimal() +
   theme(
-    axis.text.y = element_text(size = 6),     
-    axis.title.y = element_text(size = 10),
-    axis.text.x = element_text(size = 6),
-    axis.title.x = element_text(size = 10),
+    axis.text.y = element_text(size = 14),     
+    axis.title.y = element_text(size = 15),
+    axis.text.x = element_text(size = 14),
+    axis.title.x = element_text(size = 15),
     plot.title = element_text(size = 16, face = "bold",hjust = 0.5),
     legend.position = "none",
     panel.grid.major.y = element_blank() #No vertical lines
@@ -318,10 +318,10 @@ top_15_proteins <- ip_per_protein %>%
        x = "Protein", y = "Number of IPs ") +
   theme_minimal() +
   theme(
-    axis.text.y = element_text(size = 10),     
-    axis.title.y = element_text(size = 12,face = "bold"),
-    axis.text.x = element_text(size = 10),
-    axis.title.x = element_text(size = 12,face = "bold"),
+    axis.text.y = element_text(size = 14),     
+    axis.title.y = element_text(size = 15,face = "bold"),
+    axis.text.x = element_text(size = 14),
+    axis.title.x = element_text(size = 15,face = "bold"),
     plot.title = element_text(size = 16, face = "bold",hjust = 0.5, margin = margin(b = 10)),
     legend.position = "none",
     axis.line = element_line(color = "black"),
@@ -517,11 +517,7 @@ rho_dis_overall<- ggplot(summary_results_fdr_points, aes(x = rhoG, y = rhoE, col
      plot.subtitle = element_text(hjust = 0.5, face = "bold",size = 14),
      axis.title.y = element_text(size = 12,face = "bold"),
      axis.title.x = element_text(size = 12,face = "bold"))+
-    # legend.position = "right",
-     #legend.text = element_text(size = 12),
-   #  legend.title = element_text(size = 14, face = "bold"),
-    # legend.key.size = unit(1, "cm"),
-     #legend.key.width = unit(1, "cm")) +
+
    labs(
    # title = "Overall Correlation Landscape",
    subtitle = "Overall Correlation Landscape",
@@ -1953,7 +1949,7 @@ top_env_2x_proteins_table <- env_2x_hits %>%
   ) %>%
   arrange(desc(Protein_Total_Connections), Protein, Sup.Lineage, Phenotype)
 
-write.csv(top_env_2x_proteins, file = file.path(summary_csv_path, "Top_Env_2x_Proteins.csv"), row.names = FALSE)
+write.csv(top_env_2x_proteins_table, file = file.path(summary_csv_path, "Top_Env_2x_Proteins.csv"), row.names = FALSE)
 ```
 
 ```{r}
@@ -2006,6 +2002,7 @@ shared_protein_ip_env2 <- table(ip_env2_sharing$protein_count)
 
 
 shared_protein_ip_env2
+
 
 
 #Table for top ips
@@ -2986,7 +2983,7 @@ env_gen_data <- ggplot(env_gen, aes(x = trait2, fill = Sub.Lineage)) +
       panel.grid.major = element_blank(), 
     panel.grid.minor = element_blank()
     ) +      
-  scale_fill_manual(values = c("#440154FF", "#21908CFF"))
+  scale_fill_manual(values = c("#21918c", "#fde725"))
 
 #Saving plot 
 ggsave(   
@@ -3053,4 +3050,103 @@ ggplot(env_gen, aes(x = rhoE, y = rhoG, color = trait2)) +
     y = "Genetic Correlation (rhoG)",
     color = "Protein"
   )
+```
+
+### 11.9 Combining plots for gen-\> env and env-\>gen
+
+```{r}
+#Lineages for collating
+all_lineages <- c("B cells/G", "B cells/M", "CD8 T cells", "DP T cells", "Monocytes")
+
+#P1
+gen_env_collate <- gen_env_0.1 %>%
+  mutate(
+    Direction = if_else(rhoG < 0, "Negative (-)", "Positive (+)"),
+    Sub.Lineage = factor(Sub.Lineage, levels = all_lineages)
+  )
+
+#p2
+env_gen_collate<- env_gen %>%
+  mutate(
+    Sub.Lineage = factor(Sub.Lineage, levels = all_lineages)
+  )
+
+#theme
+common_theme <- theme_bw() + 
+  theme(
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 14, margin = margin(b = 10)),        
+    legend.text = element_text(size = 12),        
+    legend.title = element_text(size = 12, face = "bold"),        
+    legend.key.size = unit(1.2, "cm"),        
+    legend.key.width = unit(1, "cm"),        
+    strip.background = element_rect(fill = "white", colour = "black"),        
+    strip.text = element_text(face = "bold"),        
+    axis.title.y = element_text(size = 12, face = "bold"),      
+    axis.title.x = element_text(size = 12, face = "bold"),
+    panel.border = element_rect(colour = "black", fill = NA, linewidth = 0.8) 
+  )
+
+gen_env_collate_graph <- ggplot(gen_env_collate, aes(x = trait2, fill = Sub.Lineage)) +
+  geom_bar(position = "stack", alpha = 0.8) +
+  facet_wrap(~Direction, scales = "free_y") +
+  geom_text(stat = "count",
+            aes(label = after_stat(count)),
+            position = position_stack(vjust = 0.5),
+            size = 4,
+            color = "black",
+            fontface = "bold") +
+  scale_fill_viridis_d(drop = FALSE) + 
+  labs(
+    title = "Genetically Environmental Hits",
+    x = "Proteins",
+    y = "Number of IP",
+    fill = "Lineage" 
+  ) +
+  common_theme
+
+env_gen_collate_graph <- ggplot(env_gen_collate, aes(x = trait2, fill = Sub.Lineage)) +
+  geom_bar(position = "stack", alpha = 0.8) +
+  geom_text(stat = "count",
+            aes(label = after_stat(count)),
+            position = position_stack(vjust = 0.5),
+            size = 4,
+            color = "black",
+            fontface = "bold") +
+  scale_fill_viridis_d(drop = FALSE) + 
+  labs(
+    title = "Environmentally Genetic Hits",
+    x = "Proteins",
+    y = "Number of IP",
+    fill = "Lineage" 
+  ) +
+  common_theme +
+  guides(fill = "none") +
+  theme(
+    panel.border = element_blank(),
+    axis.line = element_line(colour = "black", linewidth = 0.8) 
+  )
+
+combined_layout_design <- "bt
+AAAA
+#BB#
+"
+
+gen_env_env_gen <- gen_env_collate_graph + env_gen_collate_graph + 
+  plot_layout(design = combined_layout_design, guides = "collect") + 
+  plot_annotation(tag_levels = 'A') & 
+  theme(legend.position = "bottom",   
+        legend.title = element_text(face = "bold"),
+        legend.text = element_text(size = 10),
+        legend.justification = "center")
+
+
+
+#Saving plot 
+ggsave(   
+  filename = "env_gen_hits/Collated_Graph.png",    
+  path = output_path,   
+  width = 8,        
+  height = 8 )
 ```

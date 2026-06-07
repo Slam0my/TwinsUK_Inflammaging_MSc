@@ -29,52 +29,56 @@ load("solar_analysis_filtering_results.RData")
 
 
 #Lineage colour palette for legend/key
-all_possible_lineages <- unique(c(genetic_0.1_hits$Sub.Lineage, environmental_hits$Sub.Lineage))
-all_possible_lineages <- sort(all_possible_lineages[!is.na(all_possible_lineages)])
-global_lineage_colours <- setNames(viridis_pal(option = "viridis")(length(all_possible_lineages)), all_possible_lineages)
-
+make_lineage_palette <- function(lineages) {
+  lineages <- sort(unique(lineages[!is.na(lineages)]))
+  if (length(lineages) == 0) return(setNames(character(0), character(0)))
+  setNames(viridis::viridis(length(lineages), option = "viridis"), lineages)
+}
 
 #Static clusters based on Leiden
 #static for stability 
 #Genetic
-g_base_gen <- graph_from_data_frame(genetic_0.1_hits %>% mutate(abs_rhoG = abs(rhoG)) %>% select(trait1, trait2, abs_rhoG), directed = FALSE)
+g_base_gen <- graph_from_data_frame(
+  genetic_0.1_hits %>% mutate(abs_rhoG = abs(rhoG)) %>% select(trait1, trait2, abs_rhoG),
+  directed = FALSE
+)
 set.seed(123)
 leiden_gen <- cluster_leiden(g_base_gen, objective_function = "modularity", weights = E(g_base_gen)$abs_rhoG)
 gen_module_lookup <- data.frame(name = V(g_base_gen)$name, module = as.character(leiden_gen$membership))
 
+
 #Environmental
-g_base_env <- graph_from_data_frame(environmental_hits %>% mutate(abs_rhoE = abs(rhoE)) %>% select(trait1, trait2, abs_rhoE), directed = FALSE)
+g_base_env <- graph_from_data_frame(
+  environmental_hits %>% mutate(abs_rhoE = abs(rhoE)) %>% select(trait1, trait2, abs_rhoE),
+  directed = FALSE
+)
 set.seed(123)
 leiden_env <- cluster_leiden(g_base_env, objective_function = "modularity", weights = E(g_base_env)$abs_rhoE)
 env_module_lookup <- data.frame(name = V(g_base_env)$name, module = as.character(leiden_env$membership))
 
 
 #Key/legend
-build_custom_legend <- function(is_genetic = TRUE) {
+build_dynamic_legend <- function(active_lineages, lineage_colours, is_genetic = TRUE) {
   link_title <- ifelse(is_genetic, "Links (ρG)", "Links (ρE)")
   
-  #Legend appears based on gen or env
-  if(is_genetic) {
-    active_lineages <- sort(unique(genetic_0.1_hits$Sub.Lineage))
+  active_lineages <- active_lineages[active_lineages %in% names(lineage_colours)]
+  
+  if (length(active_lineages) == 0) {
+    lineage_items <- "<p style='text-align: center; color: grey;'>No lineages visible</p>"
   } else {
-    active_lineages <- sort(unique(environmental_hits$Sub.Lineage))
+    active_colors <- lineage_colours[active_lineages]
+    lineage_items <- paste0(
+      '<div style="display: flex; align-items: center; margin-bottom: 8px;">',
+      '<span style="display: inline-block; width: 18px; height: 18px; border-radius: 50%; background-color: ', unname(active_colors), '; margin-right: 10px; flex-shrink: 0;"></span>',
+      '<span style="font-size: 14px; line-height: 1.2;">', names(active_colors), '</span>',
+      '</div>',
+      collapse = ""
+    )
   }
-  active_lineages <- active_lineages[!is.na(active_lineages)]
   
-  #colours for lineages
-  active_colors <- global_lineage_colours[active_lineages]
-  
-  #Listing key/legend
-  lineage_items <- paste0(
-    '<div style="display: flex; align-items: center; margin-bottom: 8px;">',
-    '<span style="display: inline-block; width: 18px; height: 18px; border-radius: 50%; background-color: ', unname(active_colors), '; margin-right: 10px; flex-shrink: 0;"></span>',
-    '<span style="font-size: 16px; line-height: 1.2;">', names(active_colors), '</span>',
-    '</div>',
-    collapse = ""
-  )
   
   HTML(paste0(
-    '<div style="padding: 8px; background-color: #f9f9f9; border-radius: 2px; height: 710px; overflow-y: auto; border: 1px solid #ddd;">',
+    '<div style="padding: 8px; background-color: #f9f9f9; border-radius: 2px; height: 700px; overflow-y: auto; border: 1px solid #ddd;">',
     
     #Node 
     '<h4 style="text-align: center; font-weight: bold; margin-top: 0; font-size: 20px;">Nodes</h4>',
@@ -98,7 +102,7 @@ build_custom_legend <- function(is_genetic = TRUE) {
     
     #Lineages
     '<h4 style="text-align: center; font-weight: bold; margin-bottom: 15px; font-size: 20px;">Lineages</h4>',
-    '<div style="column-count: 2; column-gap: 20px;">',
+    '<div style="column-count: 1; column-gap: 20px;">',
     lineage_items,
     '</div>',
     
@@ -175,15 +179,15 @@ ui <- dashboardPage(
                     htmlOutput("gen_module_summary"))
               ),
               fluidRow(
-                box(width = 9, 
+                box(width = 10, 
                     status = "primary", 
                     visNetworkOutput("network_graph_gen", 
-                                     height = "710px")),
+                                     height = "1400px")),
                 box(title = "Key", 
-                    width = 3, 
+                    width = 2, 
                     status = "primary", 
                     solidHeader = TRUE, 
-                    build_custom_legend(TRUE))
+                    uiOutput("gen_dynamic_legend"))
               )
       ),
       
@@ -225,15 +229,15 @@ ui <- dashboardPage(
                     htmlOutput("env_module_summary"))
               ),
               fluidRow(
-                box(width = 9, 
+                box(width = 10, 
                     status = "success", 
                     visNetworkOutput("network_graph_env", 
-                                     height = "710px")),
+                                     height = "1400px")),
                 box(title = "Key", 
-                    width = 3, 
+                    width = 2, 
                     status = "success", 
                     solidHeader = TRUE, 
-                    build_custom_legend(FALSE))
+                    uiOutput("env_dynamic_legend"))
               )
       )
     )
@@ -246,7 +250,8 @@ ui <- dashboardPage(
 
 server <- function(input, output, session) {
   
-  #REACTIVES
+  
+  
   #GENETIC NETWORK
   #Reactive calculations based on input slider
   network_data_gen <- reactive({
@@ -262,20 +267,31 @@ server <- function(input, output, session) {
     #Fail safe returns 0 
     if(nrow(hub_data) == 0) return(NULL)
     
-    nodes_df <- data.frame(name = unique(c(hub_data$trait1, hub_data$trait2))) %>% 
-      left_join(genetic_0.1_hits %>% select(trait1, Sub.Lineage) %>% distinct(trait1, .keep_all=TRUE), by = c("name" = "trait1")) %>%
+    
+    lineage_colours <- make_lineage_palette(hub_data$Sub.Lineage)
+    
+    nodes_df <- data.frame(name = unique(c(hub_data$trait1, hub_data$trait2))) %>%
+      left_join(genetic_0.1_hits %>% select(trait1, Sub.Lineage) %>% distinct(trait1, .keep_all = TRUE),
+                by = c("name" = "trait1")) %>%
       left_join(gen_module_lookup, by = "name") %>%
-      mutate(type = ifelse(!is.na(Sub.Lineage), "IP", "Protein"), shape_map = ifelse(type == "Protein", "Protein", Sub.Lineage), module = ifelse(is.na(module), "Unassigned", module))
+      mutate(
+        type = ifelse(!is.na(Sub.Lineage), "IP", "Protein"),
+        shape_map = ifelse(type == "Protein", "Protein", Sub.Lineage),
+        module = ifelse(is.na(module), "Unassigned", module)
+      )
+    
     
     g <- graph_from_data_frame(d = hub_data %>% 
                                  select(trait1, trait2, rhoG, abs_rhoG, edge_sign), 
                                directed = FALSE, vertices = nodes_df)
+    
     V(g)$module <- as.character(cluster_leiden(g, objective_function = "modularity", 
                                                weights = E(g)$abs_rhoG)$membership)
     
     vis_nodes <- igraph::as_data_frame(g, what = "vertices") %>% rename(id = name) %>%
-      mutate(label = ifelse(type == "Protein", id, NA), font.size = ifelse(type == "Protein", 40, 10), font.color = ifelse(type == "Protein", "black", "transparent"),
-             shape = ifelse(type == "Protein", "diamond", "dot"), size = ifelse(type == "Protein", 40, 20), color = ifelse(type == "Protein", "black", global_lineage_colours[shape_map]), 
+      mutate(label = ifelse(type == "Protein", id, NA), font.size = ifelse(type == "Protein", 55, 10), font.color = ifelse(type == "Protein", "black", "transparent"),
+             font.face = ifelse(type == "Protein", "bold", "normal"),
+             shape = ifelse(type == "Protein", "diamond", "dot"), size = ifelse(type == "Protein", 40, 20), color = ifelse(type == "Protein", "black", lineage_colours[shape_map]),
              original_color = color, original_font_color = font.color, title = paste0("<p><b>", id, "</b><br>Type: ", type, "<br>Module: ", module, "<br>Lineage: ", shape_map, "</p>"))
     
     
@@ -284,12 +300,46 @@ server <- function(input, output, session) {
       mutate(id = row_number(), value = abs(rhoG), dashes = rhoG < 0, 
              color = "#7d7d7d", original_color = "#7d7d7d", 
              title = paste0("<p><b>rhoG:</b> ", round(rhoG, 3), "<br><b>Direction:</b> ", edge_sign, "</p>"))
-    list(nodes = vis_nodes, edges = vis_edges)
+    list(nodes = vis_nodes, edges = vis_edges,lineage_colours = lineage_colours
+    )
   })
   
   
   
   #Initial network
+  output$gen_dynamic_legend <- renderUI({
+    data <- network_data_gen()
+    
+    if (is.null(data)) {
+      return(
+        tagList(
+          build_dynamic_legend(
+            character(0),
+            setNames(character(0), character(0)),
+            is_genetic = TRUE
+          )
+        )
+      )
+    }
+    
+    active_lins <- sort(
+      unique(
+        data$nodes$shape_map[data$nodes$type == "IP"]
+      )
+    )
+    
+    active_lins <- active_lins[!is.na(active_lins)]
+    
+    tagList(
+      build_dynamic_legend(
+        active_lins,
+        data$lineage_colours,
+        is_genetic = TRUE
+      )
+    )
+  })
+  
+  
   output$network_graph_gen <- renderVisNetwork({
     data <- network_data_gen(); req(data)
     visNetwork(data$nodes, data$edges) %>%
@@ -421,20 +471,33 @@ server <- function(input, output, session) {
     
     if(nrow(hub_data) == 0) return(NULL) 
     
-    nodes_df <- data.frame(name = unique(c(hub_data$trait1, hub_data$trait2))) %>% 
-      left_join(environmental_hits %>% select(trait1, Sub.Lineage) %>% distinct(trait1, .keep_all=TRUE), by = c("name" = "trait1")) %>%
-      left_join(env_module_lookup, by = "name") %>%
-      mutate(type = ifelse(!is.na(Sub.Lineage), "IP", "Protein"), shape_map = ifelse(type == "Protein", "Protein", Sub.Lineage), module = ifelse(is.na(module), "Unassigned", module))
+    lineage_colours <- make_lineage_palette(hub_data$Sub.Lineage)
     
-    g <- graph_from_data_frame(d = hub_data %>% 
-                                 select(trait1, trait2, rhoE, abs_rhoE, edge_sign), 
-                               directed = FALSE, vertices = nodes_df)
+    nodes_df <- data.frame(name = unique(c(hub_data$trait1, hub_data$trait2))) %>%
+      left_join(environmental_hits %>% select(trait1, Sub.Lineage) %>% distinct(trait1, .keep_all = TRUE),
+                by = c("name" = "trait1")) %>%
+      left_join(env_module_lookup, by = "name") %>%
+      mutate(
+        type = ifelse(!is.na(Sub.Lineage), "IP", "Protein"),
+        shape_map = ifelse(type == "Protein", "Protein", Sub.Lineage),
+        module = ifelse(is.na(module), "Unassigned", module)
+      )
+    
+    g <- graph_from_data_frame(
+      d = hub_data %>% select(trait1, trait2, rhoE, abs_rhoE, edge_sign),
+      directed = FALSE,
+      vertices = nodes_df
+    )
+    
     V(g)$module <- as.character(cluster_leiden(g, objective_function = "modularity", 
                                                weights = E(g)$abs_rhoE)$membership)
     
     vis_nodes <- igraph::as_data_frame(g, what = "vertices") %>% rename(id = name) %>%
-      mutate(label = ifelse(type == "Protein", id, NA), font.size = ifelse(type == "Protein", 50, 10), font.color = ifelse(type == "Protein", "black", "transparent"), 
-             shape = ifelse(type == "Protein", "diamond", "dot"), size = ifelse(type == "Protein", 40, 20), color = ifelse(type == "Protein", "black", global_lineage_colours[shape_map]), 
+      mutate(label = ifelse(type == "Protein", id, NA), 
+             font.size = ifelse(type == "Protein", 55, 10), 
+             font.color = ifelse(type == "Protein", "black", "transparent"),
+             font.face = ifelse(type == "Protein", "bold", "normal"),
+             shape = ifelse(type == "Protein", "diamond", "dot"), size = ifelse(type == "Protein", 40, 20),  color = ifelse(type == "Protein", "black", lineage_colours[shape_map]), 
              original_color = color, original_font_color = font.color, title = paste0("<p><b>", id, "</b><br>Type: ", type, "<br>Module: ", module, "<br>Lineage: ", shape_map, "</p>"))
     
     
@@ -443,10 +506,45 @@ server <- function(input, output, session) {
       mutate(id = row_number(), value = abs(rhoE), 
              dashes = rhoE < 0, color = "#7d7d7d", original_color = "#7d7d7d", 
              title = paste0("<p><b>rhoE:</b> ", round(rhoE, 3), "<br><b>Direction:</b> ", edge_sign, "</p>"))
-    list(nodes = vis_nodes, edges = vis_edges)
+    list(nodes = vis_nodes, edges = vis_edges, lineage_colours = lineage_colours
+    )
   })
   
   #Layout 
+  
+  
+  output$env_dynamic_legend <- renderUI({
+    data <- network_data_env()
+    
+    if (is.null(data)) {
+      return(
+        tagList(
+          build_dynamic_legend(
+            character(0),
+            setNames(character(0), character(0)),
+            is_genetic = TRUE
+          )
+        )
+      )
+    }
+    
+    active_lins <- sort(
+      unique(
+        data$nodes$shape_map[data$nodes$type == "IP"]
+      )
+    )
+    
+    active_lins <- active_lins[!is.na(active_lins)]
+    
+    tagList(
+      build_dynamic_legend(
+        active_lins,
+        data$lineage_colours,
+        is_genetic = TRUE
+      )
+    )
+  })
+  
   output$network_graph_env <- renderVisNetwork({
     data <- network_data_env(); req(data)
     visNetwork(data$nodes, data$edges) %>%
