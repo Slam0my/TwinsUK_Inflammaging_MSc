@@ -69,35 +69,11 @@ output_path <- "~/Twins_Project/visualisations/ip_ip"
 
 # IP-IP Genetic Associations
 
-New method: Finding the genetic associations/correlations between IP and IP .
-
 Ideally, I would run IP-IP SOLAR on all IPs to find the genetic correlations but it is too computationally intensive. Instead, using the already genetically filtered genetic_0.1_hits where we know IP-Protein associations were heritable, we can take the selected IPs (4300) then that has been narrowed down to identify only IPs that share 2+ proteins, disregarding those unique to just one, and build IP profiles across proteins. Find IP-IP correlations between rows. However this doesn't mean IP-IP are directly genetically correlated as they could be connected to the protein through different genetic pathways. This can only infer/estimate but not a direct result.
-
-If I use this way to find the genetic associatiosn with IP-IP then wouldn't I also need to apply this logic/step to protein-protein associations as well?
-
--   Genetic Correlation with **Pearsons**
-
-    -   As we used SOLAR to prove those associations were genetically driven, we can use Pearson to map the observed strength of the associations.
-
--   Genetic Correlations building on the SOLAR protein-protein network results with **Jaccard similarity**
-
-    -   if IP 1 is associated with protein x and IP 2 is associated with protein Y and the current network shows protein x and y have high pG, then IP 1 and 2 are genetically correlated by proxy.
-
-    -   But this method relies on the SOLAR results which may not be representative?
-
-    -   This would involve (1) creating IP-Protein mapping matrix and 1 if SOLAR associated, 0 if not , (2) using exisiting protein-protein matrix , (3) multiply them ip-protein matrix x protein-protein matrix
-
-    -   I need to find IPs that share the SAME proteins sets.
-
-    -   However, this may be down to sharing the same cell lineage which is a known relationship.
-
-With finding the IP-IP matrix, there is potential to explore the cell lineages.
 
 ## 2 Matrix
 
 Conversion of the genetic_0.1_hits is necessary from a long to wide format with rows as IPs, columns as proteins and entries as RhoG (pG) . There will be lots of NAs as the majority of IPs do not significnatly associate with 2+ proteins.
-
-Problem is that not all IPs share multiple proteins, 1464 IPs are unique to one protein but the rest (2836) are significantly correlated to 2+ proteins.
 
 ```{r}
 #Matrix conversion from genetic_0.1_hits
@@ -286,15 +262,16 @@ ip_bar_shared <- ggplot(ip_lineage_check, aes(x = as.factor(shared_count))) +
   labs(
     title = "IP-IP Pairs By Protein Shared Frequency",
     x = "Number of Shared Proteins",
-    y = "Frequency (IP-IP Pairs)"
+    y = "Frequency"
   ) +
   
   theme_bw() +
   theme(
     plot.title = element_text(hjust = 0.5, face = "bold", size = 14),
     strip.background = element_rect(fill = "white"),
-    strip.text = element_text(face = "bold", size = 12),
-    axis.title = element_text(face = "bold", size = 12),
+    strip.text = element_text(face = "bold", size = 14),
+    axis.text = element_text(size = 12),
+    axis.title = element_text(face = "bold", size = 14),
     panel.grid.major = element_blank(),
     panel.grid.minor = element_blank()
     )
@@ -338,10 +315,13 @@ density_jaccard_plot <- ggplot(density_freq_plot_data, aes(x = as.factor(shared_
   theme(
     plot.title = element_text(hjust = 0.5, face = "bold", size = 14),
     strip.background = element_rect(fill = "white"),
-    strip.text = element_text(face = "bold", size = 12),
+    strip.text = element_text(face = "bold", size = 14),
     panel.grid.minor = element_blank(),
-    axis.title = element_text(face = "bold", size = 12),
-    legend.position = "right"
+    axis.text = element_text(size = 12),
+    axis.title = element_text(face = "bold", size = 14),
+    legend.position = "right",
+    legend.text = element_text(size = 14),     
+    legend.title = element_text(size = 14, face = "bold")
 
   )
 
@@ -367,13 +347,13 @@ density_jaccard_plot <- density_jaccard_plot +
   theme(plot.tag.position = c(-0.02, 0.95), plot.tag = element_text(size = 20, face = "bold"))
 
 combined_panels <- (ip_bar_shared | plot_spacer() | density_jaccard_plot) +
-  plot_layout(widths = c(1, 0.25, 1))
+  plot_layout(widths = c(1, 0.05, 1))
 
 ggsave(
   filename = "IP_IP_Panels_Combined.png", 
   plot = combined_panels,
   path = output_path,
-  width = 18,     
+  width = 14,     
   height = 8,
   dpi = 600
 )
@@ -401,7 +381,7 @@ Identify what modules based on Leiden clustering and their specific lineages.
 ```{r}
 #Filter for hub 
 ip_intra_hub <- intra_lineage %>%
-  filter(shared_count >= 7) %>%
+  filter(shared_count >= 5) %>%
   select(IP_A, IP_B, weighted)
 
 #Graph
@@ -444,28 +424,28 @@ cluster_summary_long <- cluster_summary %>%
     values_to = "Count"
   )
 
-#Heatmap for 7+ protein sharing hub as above
+#Heatmap
 cluster_7_heatmap <- ggplot(cluster_summary_long, aes(x = as.factor(Cluster), y = Sub_Lineage, fill = Count)) +
   geom_tile() +
   scale_fill_gradient(low = "white", high = "#440154FF") + #Colour scale
-  labs(title = "Intra-Lineage Clusters (7+ Shared Proteins)",
-       x = "Cluster (Leiden)", # <-- Updated Label
+  labs(title = "Intra-Lineage Clusters",
+       x = "Leiden Clusters", 
        y = "Sub-Lineage") +
   #Aesthetic
   theme_bw() +
   theme(
-    plot.title = element_text(size = 12, face = "bold",hjust = 0.5, margin = margin(b = 10)),
+    plot.title = element_text(size = 15, face = "bold",hjust = 0.5, margin = margin(b = 10)),
     strip.background = element_rect(fill = "white"),
-    strip.text = element_text(face = "bold", size = 12),
-    axis.title = element_text(face = "bold", size = 12),
+    strip.text = element_text(face = "bold", size = 14),
+    axis.title = element_text(face = "bold", size = 14),
     panel.grid.major = element_blank(),
     panel.grid.minor = element_blank(),
-    legend.text = element_text(size = 8),
-    legend.title = element_text(size = 10, face = "bold"),
-    axis.text.y = element_text(size = 8),     
-    axis.title.y = element_text(size = 10,face = "bold"),
-    axis.text.x = element_text(size = 8),
-    axis.title.x = element_text(size = 10,face = "bold")
+    legend.text = element_text(size = 14),
+    legend.title = element_text(size = 15, face = "bold"),
+    axis.text.y = element_text(size = 14),     
+    axis.title.y = element_text(size = 15,face = "bold"),
+    axis.text.x = element_text(size = 14),
+    axis.title.x = element_text(size = 15,face = "bold")
   ) 
 
 #Saving plot
@@ -493,13 +473,11 @@ head(cross_lineage, 20)
 
 There are a few cross lineage. Top cross have weighted scores of 3.2 which is low (shared proteins 4 out of 5) though these are both T cells. Regardless of weight, checking jaccard score 1.0. These have 3 proteins shared with cross lineages of B cells and T cells. These have high jaccard + low weight -\> specific links, maybe only one pathway triggered.
 
-Specific sub.lineages has highest connection to others? How many sub connects to sub
-
 ### 6.2 Bridge Analysis
 
-Finding out what proteins these top cross lineage pairs have
+Finding out what proteins these top cross lineage pairs have.
 
-Top 3 proteins shared with a score of 1
+Top 3 proteins shared with a score of 1.
 
 ```{r}
 #Filter for 3+ as these
@@ -539,7 +517,7 @@ print(bridge_protein_counts)
 
 There are CXCL10, CXCL9, CXCL11 (chemokine triad) and IL_12B. CXCL10 and CXCL9 persist in all IP-IP pairs. This is followed by CXCL11 then IL12B
 
-Finding out what specific cross lineage (Sub.Lineages) bridges there are
+Finding out what specific cross lineage (Sub.Lineages) bridges there are.
 
 ```{r}
 #Creating a df that quantifies the pairs
@@ -663,8 +641,6 @@ webshot(
 
 # Graphing
 
-OVERALL GOAL: These top IP-IP pairs, need to compare with which proteins are they sharing
-
 ## Chord Diagram
 
 ### Aggregating the data
@@ -702,8 +678,8 @@ names(sub_colors) <- all_sub_lineages
 #Circle parameters
 circos.par(gap.after = 2, 
            start.degree = 180,
-           canvas.xlim = c(-1.1, 1.1), 
-           canvas.ylim = c(-1.1, 1.1)) 
+           canvas.xlim = c(-1.08, 1.05), 
+           canvas.ylim = c(-1, 1)) 
 
 #Order so lineages are together
 order_circle <- c(
@@ -863,5 +839,3 @@ ggsave(
   height = 24
 )
 ```
-
-# 

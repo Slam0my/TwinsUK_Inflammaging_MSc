@@ -3134,7 +3134,7 @@ AAAA
 "
 
 gen_env_env_gen <- gen_env_collate_graph + env_gen_collate_graph + 
-  plot_layout(design = combined_layout_design, guides = "collect") + 
+  plot_layout(design = combined_layout_design, heights = c(1.2, 1), guides = "collect") + 
   plot_annotation(tag_levels = 'A') & 
   theme(legend.position = "bottom",   
         legend.title = element_text(face = "bold"),
