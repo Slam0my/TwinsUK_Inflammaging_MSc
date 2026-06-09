@@ -51,14 +51,6 @@ load("~/Twins_Project/notebooks/solar_analysis_filtering_results.RData")
 
 ```
 
-As a reminder, genetic_0.1_hits, genetic_0.3_hits, environmental_hits and both_hits are FDR filtered 0.05.
-
-gen_env_0.1 and gen_env_0.3 are genetically correlated with environmental correlations.
-
-env_gen is environmentally correlated with genetic correlations.
-
-sum_results_combined contains the FDR filtered plus lineage columns.
-
 ## 1.3 Save path
 
 Defining an output path where I will save the visualisations generated to.

@@ -157,3 +157,46 @@ envfinal_h2_summary <- unique_heritability_env %>%
 
 envfinal_h2_summary
 ```
+
+### Pure Environmental
+
+```{r}
+prot_env_hits  %>%
+  filter(abs(rhoE) >= 2 * abs(rhoG))%>%
+  summarise (
+    mean_h2r1 = mean(h2r1),
+    sd_h2r1   = sd(h2r1),
+    max_h2r1 = max(h2r1),
+    mean_h2r2 = mean(h2r2),
+    sd_h2r2= sd(h2r2),
+    max_h2r2 = max(h2r2),
+    mean_rhoG = mean(abs(rhoG)),
+    sd_rhoG= sd(abs(rhoG)),
+    mean_rhoE = mean(abs(rhoE)),
+    sd_rhoE= sd(abs(rhoE))
+  )
+```
+
+```{r}
+#Combining all unique proteins
+unique_heritability_env_2x <- prot_env_hits %>%
+  filter(abs(rhoE) >= 2 * abs(rhoG))%>%
+  select(trait1, h2r1) %>%
+  rename(protein = trait1, h2 = h2r1) %>%
+  bind_rows(
+    prot_gen_0.1_hits %>% 
+    select(trait2, h2r2) %>% 
+    rename(protein = trait2, h2 = h2r2)
+  ) %>%
+  distinct(protein, .keep_all = TRUE) #Duplicate removal
+
+#Calculating stats
+envfinal_h2_summary_2x <- unique_heritability_env_2x %>%
+  summarise(
+    mean_h2 = mean(h2),
+    sd_h2 = sd(h2),
+    max_h2 = max(h2)
+  )
+
+envfinal_h2_summary_2x
+```
