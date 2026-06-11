@@ -453,6 +453,18 @@ tr %>%
 
 There are 27 unique lineages.
 
+### 3.5 Unique IPs
+
+```{r}
+count(tr$IP)
+length(unique(tr$IP)) 
+
+#IP frequency
+tr %>%
+  count(IP, sort = TRUE)
+
+```
+
 ```{r}
 sessionInfo()
 

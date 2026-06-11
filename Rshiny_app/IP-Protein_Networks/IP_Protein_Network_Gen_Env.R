@@ -352,8 +352,9 @@ server <- function(input, output, session) {
                  nodesIdSelection = list(enabled = TRUE, main = "Search by Name", values = data$nodes %>% 
                                            arrange(desc(type == "Protein"), id) %>% pull(id))) %>%
       
-      visEdges(smooth = list(enabled = TRUE, type = "continuous"),
-               scaling = list(min = 1, max = 7)) %>% 
+      visEdges(
+        smooth = list(enabled = TRUE, type = "continuous"),
+        scaling = list(min = 1, max = 7)) %>%
       visExport(type = "png", name = "IP_Protein_Gen") %>%
       visInteraction(navigationButtons = TRUE, tooltipDelay = 0)
   })
